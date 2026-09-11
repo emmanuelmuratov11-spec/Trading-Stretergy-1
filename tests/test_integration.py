@@ -119,3 +119,48 @@ def test_risk_reducing_moves_are_never_delayed(cfg):
     if res.halted_bars > 0:
         flat = res.weights.abs().sum(axis=1).iloc[-1]
         assert flat < 1e-9, "book was not flattened while the guard was halted"
+
+
+def test_trend_engine_runs_end_to_end(cfg):
+    cfg.model.kind = "trend"
+    res = backtest.run(cfg, _frames(cfg))
+    assert len(res.equity) > 0
+    assert res.weights.abs().sum(axis=1).max() <= cfg.risk.max_gross_leverage + 1e-9
+
+
+def test_blend_sits_between_its_components(cfg):
+    """A blend that agrees with neither parent would mean the wiring is wrong."""
+    frames = _frames(cfg)
+    cfg.model.kind = "trend"
+    trend = backtest.run(cfg, frames).probabilities.stack().mean()
+    cfg.model.kind = "blend"
+    blend = backtest.run(cfg, frames).probabilities.stack().mean()
+    cfg.model.kind = "ml"
+    ml = backtest.run(cfg, frames).probabilities.stack().mean()
+    assert min(trend, ml) - 0.05 <= blend <= max(trend, ml) + 0.05
+
+
+def test_unknown_engine_is_rejected(cfg):
+    import pytest
+    cfg.model.kind = "definitely-not-a-strategy"
+    with pytest.raises(ValueError):
+        cfg.validate()
+
+
+def test_rebalance_exemption_is_per_symbol(cfg):
+    """One symbol trimming must not drag every other position into a trade.
+
+    Evaluating the risk-reducing exemption book-wide (`.any()`) makes it fire on
+    almost every bar once several symbols are held, silently cancelling the
+    rebalance schedule.
+    """
+    frames = _frames(cfg)
+    cfg.costs.rebalance_every = 24
+    throttled = backtest.run(cfg, frames)
+    cfg.costs.rebalance_every = 1
+    every_bar = backtest.run(cfg, frames)
+    # A 24-bar schedule should cut turnover substantially, not marginally.
+    assert throttled.metrics.turnover < every_bar.metrics.turnover * 0.75, (
+        f"schedule barely bit: {throttled.metrics.turnover:.1f}x vs "
+        f"{every_bar.metrics.turnover:.1f}x every bar"
+    )

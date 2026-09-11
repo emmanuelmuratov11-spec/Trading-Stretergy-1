@@ -23,6 +23,7 @@ on:
     paths:
       - "quantbot/**"
       - "config.yaml"
+      - "scripts/**"
       - ".github/workflows/backtest.yml"
 
 concurrency:
@@ -88,6 +89,22 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pre-registered strategy comparison (dev vs holdout)
+        if: always()
+        run: |
+          python scripts/compare.py --holdout-frac 0.30 --trials 7 \
+            2>&1 | tee compare_log.txt
+
+      - name: Comparison to the run page
+        if: always()
+        run: |
+          {
+            echo "## Strategy comparison (real data, dev vs holdout)"
+            echo '```'
+            sed -n '/PRE-REGISTERED COMPARISON/,$p' compare_log.txt | head -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -95,5 +112,6 @@ jobs:
           path: |
             reports/
             reports_log.txt
+            compare_log.txt
           if-no-files-found: warn
           retention-days: 30

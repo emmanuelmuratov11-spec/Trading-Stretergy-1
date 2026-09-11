@@ -27,6 +27,7 @@ from quantbot.features import build_features, realised_vol
 from quantbot.labels import binary_target, triple_barrier
 from quantbot.metrics import Metrics, compute as compute_metrics
 from quantbot.model import WalkForwardModel
+from quantbot.strategies import probabilities as engine_probabilities
 from quantbot.risk import (
     DrawdownGuard, apply_portfolio_limits, covariance_path, edge_to_weight,
     portfolio_vol_scalar, smooth_scalar, volatility_scalar,
@@ -119,7 +120,8 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
         mapped = np.searchsorted(orig_pos[valid].to_numpy(), t_end, side="left")
         t_end_local = np.clip(mapped, 0, len(X) - 1)
 
-        probs, n_splits = _oos_probabilities(X, y, t_end_local, cfg)
+        probs, n_splits = engine_probabilities(
+            df, cfg, bpy, ml_fn=lambda: _oos_probabilities(X, y, t_end_local, cfg))
         prob_cols[sym] = probs.reindex(df.index)
         vol_cols[sym] = realised_vol(df["close"], cfg.labels.vol_window, bpy)
         ret_cols[sym] = df["close"].pct_change().shift(-1)  # return earned *after* bar t
@@ -190,11 +192,17 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
 
         # Rebalance on a schedule rather than every bar. The model only refits
         # weekly, so re-trading hourly pays a spread to chase a signal that has
-        # barely moved. Risk-reducing moves -- a forced exit, or the drawdown
-        # guard flattening the book -- are never delayed.
-        reducing = (target.abs() < prev_w.abs() - 1e-12).any() or not allowed
-        if (t % cfg.costs.rebalance_every) != 0 and not reducing:
-            target = prev_w.copy()
+        # barely moved. Risk-reducing moves -- trimming a position, a forced
+        # exit, or the drawdown guard flattening the book -- are never delayed.
+        #
+        # The exemption is evaluated PER SYMBOL. Asking whether *any* symbol is
+        # reducing lets one noisy name drag the whole book into a rebalance,
+        # which fires on nearly every bar once there are a few symbols and
+        # defeats the schedule entirely (measured: 112.5x -> 89.9x turnover,
+        # where the schedule alone should have cut several times more).
+        if (t % cfg.costs.rebalance_every) != 0 and allowed:
+            reducing = target.abs() < prev_w.abs() - 1e-12
+            target = target.where(reducing, prev_w)
 
         delta = target - prev_w
         # No-trade band. Rebalancing costs real money every time, so a move is

@@ -67,3 +67,23 @@ def test_forward_returns_are_shifted_not_peeked(btc):
     fwd = btc["close"].pct_change().shift(-1)
     manual = btc["close"].shift(-1) / btc["close"] - 1.0
     pd.testing.assert_series_equal(fwd.dropna(), manual.dropna(), check_names=False)
+
+
+def test_trend_signal_is_causal(btc):
+    """The trend engine has no fitting step, so a leak here would be pure
+    carelessness -- and pure carelessness is exactly what this catches."""
+    import numpy as np
+
+    from quantbot.config import Config
+    from quantbot.data.base import bars_per_year
+    from quantbot.strategies import trend_probabilities
+
+    cfg = Config()
+    cfg.model.kind = "trend"
+    bpy = bars_per_year("1h")
+    cut = 2000
+    full = trend_probabilities(btc, cfg, bpy).iloc[cut - 1]
+    trunc = trend_probabilities(btc.iloc[:cut], cfg, bpy).iloc[-1]
+    assert np.isclose(full, trunc, rtol=1e-9, atol=1e-12), (
+        f"trend signal leaked: {trunc} became {full} once future bars arrived"
+    )

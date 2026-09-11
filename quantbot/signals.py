@@ -22,6 +22,7 @@ from quantbot.labels import binary_target, triple_barrier
 from quantbot.model import WalkForwardModel
 from quantbot.notify.base import Alert
 from quantbot.portfolio import Order, Portfolio
+from quantbot.strategies import trend_probabilities
 from quantbot.risk import (
     apply_portfolio_limits, covariance_path, edge_to_weight,
     portfolio_vol_scalar, stop_loss_price, volatility_scalar,
@@ -61,6 +62,13 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
     for sym in symbols:
         df = frames[sym]
         prices[sym] = float(df["close"].iloc[-1])
+
+        if cfg.model.kind == "trend":
+            # No fitting required: the rule is fixed, so the live path is the
+            # backtest path with no room to diverge.
+            tp = trend_probabilities(df, cfg, bpy).iloc[-1]
+            probs[sym] = float(tp) if np.isfinite(tp) else 0.5
+            continue
 
         mkt = None if sym == cfg.data.benchmark else market
         X = build_features(df, cfg.features, bpy, market=mkt)
