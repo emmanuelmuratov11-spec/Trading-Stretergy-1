@@ -1,0 +1,96 @@
+name: Backtest
+
+# Runs the walk-forward backtest against REAL exchange data and prints the
+# report into the run log. Triggers on strategy-code changes so a change that
+# quietly destroys the edge shows up immediately, and on demand.
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "Days of history to fetch"
+        default: "720"
+        type: string
+      timeframe:
+        description: "Bar size"
+        default: "1h"
+        type: choice
+        options: ["1h", "6h", "1d"]
+      trials:
+        description: "Configurations tested so far (drives the DSR haircut)"
+        default: "1"
+        type: string
+  push:
+    paths:
+      - "quantbot/**"
+      - "config.yaml"
+      - ".github/workflows/backtest.yml"
+
+concurrency:
+  group: backtest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Confirm the exchange is actually reachable
+        run: |
+          echo "Runner egress check (this is what the sandbox could not do):"
+          for h in api.exchange.coinbase.com api.binance.com; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$h/" || echo 000)
+            echo "  $h -> HTTP $code"
+          done
+
+      - name: Run walk-forward backtest on real market data
+        id: bt
+        env:
+          LOOKBACK: ${{ inputs.lookback_days || '720' }}
+          TIMEFRAME: ${{ inputs.timeframe || '1h' }}
+          TRIALS: ${{ inputs.trials || '1' }}
+        run: |
+          python - <<'PY'
+          import os, yaml
+          cfg = yaml.safe_load(open("config.yaml"))
+          cfg["data"]["lookback_days"] = int(os.environ["LOOKBACK"])
+          cfg["data"]["timeframe"] = os.environ["TIMEFRAME"]
+          yaml.safe_dump(cfg, open("config.yaml", "w"), sort_keys=False)
+          print("timeframe:", cfg["data"]["timeframe"],
+                "lookback:", cfg["data"]["lookback_days"],
+                "symbols:", cfg["data"]["symbols"])
+          PY
+          python -m quantbot backtest \
+            --trials "$TRIALS" \
+            --plot reports/backtest.png \
+            --json-out reports/metrics.json \
+            --equity-out reports/equity.csv \
+            -v 2>&1 | tee reports_log.txt
+
+      - name: Summarise to the run page
+        if: always()
+        run: |
+          {
+            echo "## Backtest on real market data"
+            echo '```'
+            sed -n '/--- STRATEGY/,$p' reports_log.txt 2>/dev/null | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backtest-results
+          path: |
+            reports/
+            reports_log.txt
+          if-no-files-found: warn
+          retention-days: 30
