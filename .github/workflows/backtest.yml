@@ -28,7 +28,9 @@ on:
 
 concurrency:
   group: backtest-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue rather than cancel: a backtest takes ~15 minutes, and killing one
+  # mid-flight to start another just loses the result you were waiting for.
+  cancel-in-progress: false
 
 jobs:
   backtest:

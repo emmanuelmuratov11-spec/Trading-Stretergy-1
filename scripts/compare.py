@@ -94,6 +94,25 @@ def main() -> int:
     base = Config.from_yaml(args.config)
     rows = []
 
+    # One shared CALENDAR cutoff for every candidate.
+    #
+    # Splitting each config at a fraction of its own scored bars gives every
+    # timeframe a different holdout window: the ML run loses bars to warm-up,
+    # so its holdout was 163 days while the daily runs got 269. Those windows
+    # covered opposite markets (BTC +13% vs -11%), which made the "beat buy &
+    # hold" column compare strategies against different realities. Anchoring
+    # every candidate to the same dates is what makes the rows comparable.
+    probe = Config.from_dict(base.to_dict())
+    probe.data.timeframe = "1d"
+    probe.validate()
+    probe_frames = align(load_universe(probe.data, use_cache=True, max_age_minutes=600))
+    # The span every symbol actually covers: latest start, earliest end.
+    start = max(d.index[0] for d in probe_frames.values())
+    end = min(d.index[-1] for d in probe_frames.values())
+    cutoff = start + (end - start) * (1 - args.holdout_frac)
+    print(f"shared holdout begins {cutoff:%Y-%m-%d} "
+          f"(full span {start:%Y-%m-%d} to {end:%Y-%m-%d})\n")
+
     for label, kind, timeframe in CANDIDATES:
         cfg = build(kind, timeframe, base)
         try:
@@ -117,9 +136,9 @@ def main() -> int:
 
         bpy = bars_per_year(cfg.data.timeframe)
         idx = res.returns.index
-        cut = int(len(idx) * (1 - args.holdout_frac))
+        cut = int(idx.searchsorted(cutoff))
         if cut < 30 or len(idx) - cut < 30:
-            log.error("%s: too few bars to split", label)
+            log.error("%s: too few bars either side of the shared cutoff", label)
             continue
 
         def score(sl: slice):
@@ -136,7 +155,8 @@ def main() -> int:
         hold_m, hold_b = score(slice(cut, None))
         rows.append((label, dev_m, hold_m, hold_b))
         print(f"  ran {label}  ({len(idx)} scored bars, dev={cut}, "
-              f"holdout={len(idx) - cut})", flush=True)
+              f"holdout={len(idx) - cut}, holdout starts {idx[cut]:%Y-%m-%d})",
+              flush=True)
 
     if not rows:
         print("nothing ran")
