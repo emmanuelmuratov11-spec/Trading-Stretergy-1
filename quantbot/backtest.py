@@ -188,6 +188,14 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
             halted_bars += 1
         target = targets.loc[ts] if allowed else pd.Series(0.0, index=symbols)
 
+        # Rebalance on a schedule rather than every bar. The model only refits
+        # weekly, so re-trading hourly pays a spread to chase a signal that has
+        # barely moved. Risk-reducing moves -- a forced exit, or the drawdown
+        # guard flattening the book -- are never delayed.
+        reducing = (target.abs() < prev_w.abs() - 1e-12).any() or not allowed
+        if (t % cfg.costs.rebalance_every) != 0 and not reducing:
+            target = prev_w.copy()
+
         delta = target - prev_w
         # No-trade band. Rebalancing costs real money every time, so a move is
         # only worth making if it is material in absolute terms *and* relative

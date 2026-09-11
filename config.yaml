@@ -38,14 +38,15 @@ risk:
   allow_shorts: false
   max_drawdown_stop: 0.25   # flatten everything past a 25% drawdown
   drawdown_recovery: 0.10
-  scalar_smoothing: 48
+  scalar_smoothing: 120
 
 costs:
   taker_fee_bps: 6.0        # 0.06%. Check your own exchange's actual fee.
   half_spread_bps: 2.0
   slippage_coef: 0.35
-  min_trade_weight: 0.02
-  rebalance_band: 0.25
+  min_trade_weight: 0.04
+  rebalance_band: 0.40
+  rebalance_every: 6        # hourly bars, weekly refits -> no need to retrade hourly
 
 alerts:
   channels: ["console", "telegram"]

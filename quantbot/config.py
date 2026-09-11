@@ -76,7 +76,7 @@ class RiskConfig:
     vol_ceiling: float = 2.50
     max_vol_scale: float = 3.0    # cap on leveraging *up* a quiet market
     cov_span: int = 168           # EWMA span for the covariance estimate
-    scalar_smoothing: int = 48    # damp sizing jitter; turnover is pure cost
+    scalar_smoothing: int = 120   # damp sizing jitter; turnover is pure cost
 
 
 @dataclass
@@ -86,8 +86,9 @@ class CostConfig:
     taker_fee_bps: float = 6.0       # 0.06% - typical retail taker fee
     half_spread_bps: float = 2.0
     slippage_coef: float = 0.35      # multiplies (vol / typical vol)
-    min_trade_weight: float = 0.02   # absolute no-trade band
-    rebalance_band: float = 0.25     # also ignore moves under 25% of the position
+    min_trade_weight: float = 0.04   # absolute no-trade band
+    rebalance_band: float = 0.40     # also ignore moves under 40% of the position
+    rebalance_every: int = 6         # only consider rebalancing every N bars
 
 
 @dataclass
@@ -125,6 +126,8 @@ class Config:
             raise ValueError("max_position_weight must be positive")
         if self.labels.horizon_bars < 1:
             raise ValueError("horizon_bars must be >= 1")
+        if self.costs.rebalance_every < 1:
+            raise ValueError("rebalance_every must be >= 1")
 
     @classmethod
     def from_yaml(cls, path: str | None) -> "Config":

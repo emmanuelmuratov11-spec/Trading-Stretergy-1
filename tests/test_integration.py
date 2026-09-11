@@ -88,3 +88,34 @@ def test_drawdown_guard_flattens_in_a_crash(cfg):
     res = backtest.run(cfg, crashed)
     if res.metrics.max_drawdown <= -0.05:
         assert res.halted_bars > 0, "guard never tripped despite a large drawdown"
+
+
+def test_rebalance_interval_cuts_turnover(cfg):
+    """Turnover is a guaranteed cost against an uncertain edge, so the
+    rebalance schedule must measurably reduce it."""
+    frames = _frames(cfg)
+    cfg.costs.rebalance_every = 1
+    every_bar = backtest.run(cfg, frames)
+    cfg.costs.rebalance_every = 12
+    throttled = backtest.run(cfg, frames)
+    assert throttled.metrics.turnover < every_bar.metrics.turnover
+    assert throttled.costs.sum() < every_bar.costs.sum()
+
+
+def test_risk_reducing_moves_are_never_delayed(cfg):
+    """A schedule that postpones an exit would turn a cost control into a
+    risk control failure."""
+    frames = _frames(cfg)
+    cfg.costs.rebalance_every = 50
+    cfg.risk.max_drawdown_stop = 0.03
+    crashed = {}
+    for sym, df in frames.items():
+        d = df.copy()
+        factor = pd.Series(np.linspace(1.0, 0.3, len(d)), index=d.index)
+        for col in ("open", "high", "low", "close"):
+            d[col] = d[col] * factor
+        crashed[sym] = d
+    res = backtest.run(cfg, crashed)
+    if res.halted_bars > 0:
+        flat = res.weights.abs().sum(axis=1).iloc[-1]
+        assert flat < 1e-9, "book was not flattened while the guard was halted"
