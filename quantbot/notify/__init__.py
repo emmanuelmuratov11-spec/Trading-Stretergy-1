@@ -58,4 +58,17 @@ def send_all(notifiers: list[Notifier], alert: Alert) -> dict[str, bool]:
     return results
 
 
-__all__ = ["Notifier", "Alert", "build_notifiers", "send_all"]
+def send_photo_all(notifiers: list[Notifier], path: str, caption: str = "") -> dict[str, bool]:
+    """Best-effort image delivery. A channel that cannot carry images is not an
+    error -- the text alert has already gone out and carries the substance."""
+    results: dict[str, bool] = {}
+    for n in notifiers:
+        try:
+            results[n.name] = bool(n.send_photo(path, caption))
+        except Exception as exc:
+            log.error("%s photo delivery failed: %s", n.name, exc)
+            results[n.name] = False
+    return results
+
+
+__all__ = ["Notifier", "Alert", "build_notifiers", "send_all", "send_photo_all"]

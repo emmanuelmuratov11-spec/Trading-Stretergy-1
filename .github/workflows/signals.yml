@@ -56,6 +56,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           python -m quantbot ${{ inputs.mode || 'paper' }} \
+            --plot reports/portfolio.png \
             ${{ inputs.force_send && '--force-send' || '' }} -v
 
       - name: Commit portfolio state
@@ -75,6 +76,15 @@ jobs:
               sleep $((2 ** i))
             done
           fi
+
+      - name: Keep the chart downloadable from the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: charts
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Notify on failure
         if: failure()

@@ -50,12 +50,12 @@ class BacktestResult:
     diagnostics: dict = field(default_factory=dict)
 
     def summary(self) -> str:
-        from quantbot.metrics import format_report
+        from quantbot.metrics import compare_to_benchmark, format_report
+        _, verdict = compare_to_benchmark(self.metrics, self.benchmark_metrics)
         lines = [format_report(self.metrics, "STRATEGY (out-of-sample)"),
-                 "", format_report(self.benchmark_metrics, "BENCHMARK (buy & hold)")]
-        edge = self.metrics.sharpe - self.benchmark_metrics.sharpe
-        lines += ["", f"  Sharpe vs benchmark: {edge:+.2f}",
-                  f"  Bars halted by drawdown guard: {self.halted_bars:,}"]
+                 "", format_report(self.benchmark_metrics, "BENCHMARK (buy & hold)"),
+                 "", "  " + verdict.replace("\n", "\n  "),
+                 f"  Bars halted by drawdown guard: {self.halted_bars:,}"]
         return "\n".join(lines)
 
 

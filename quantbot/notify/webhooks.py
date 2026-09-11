@@ -32,6 +32,9 @@ class _WebhookBase:
             return False
         return True
 
+    def send_photo(self, path: str, caption: str = "") -> bool:
+        return False   # most webhooks take JSON only; Discord overrides this
+
 
 class DiscordNotifier(_WebhookBase):
     name = "discord"
@@ -40,6 +43,17 @@ class DiscordNotifier(_WebhookBase):
     def payload(self, alert: Alert) -> dict:
         body = alert.body if len(alert.body) < 1800 else alert.body[:1800] + "\n...(truncated)"
         return {"content": f"**{alert.title}**\n```\n{body}\n```"}
+
+    def send_photo(self, path: str, caption: str = "") -> bool:
+        if not self.enabled or not os.path.exists(path):
+            return False
+        with open(path, "rb") as fh:
+            resp = requests.post(
+                self.url, data={"content": caption[:1800]},
+                files={"file": (os.path.basename(path), fh, "image/png")},
+                timeout=60,
+            )
+        return resp.status_code < 300
 
 
 class SlackNotifier(_WebhookBase):

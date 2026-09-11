@@ -62,6 +62,7 @@ of 2021. It does not mean the system becomes reliably profitable over time.
 | `backtest.py` | Walk-forward simulation with fees, spread and volatility-scaled slippage. |
 | `metrics.py` | Sharpe, Sortino, Calmar — plus PSR and DSR, which haircut your Sharpe for luck and for multiple testing. |
 | `signals.py` | Live signals, sharing one implementation with the backtest so the two cannot drift apart. |
+| `plotting.py` | Four-panel visual report, delivered to your phone as an image. |
 
 ### Design decisions worth knowing about
 
@@ -92,18 +93,49 @@ python -m quantbot selftest
 # 2. Backtest on real market data. --trials matters: see below.
 python -m quantbot backtest --trials 1
 
-# 3. See what it would do right now (no state changes).
+# 3. Same, with a chart.
+python -m quantbot backtest --plot reports/backtest.png
+
+# 4. See what it would do right now (no state changes).
 python -m quantbot signal
 
-# 4. Paper trade: same, but updates state/portfolio.json.
-python -m quantbot paper
-python -m quantbot report
+# 5. Paper trade: same, but updates state/portfolio.json.
+#    --plot also sends an equity chart to your phone.
+python -m quantbot paper --plot
+python -m quantbot report --plot
 ```
 
 `--trials` should be the number of configurations you have tried in total. It
 drives the deflated-Sharpe haircut. Lying to it only lies to you.
 
 ---
+
+## The visual report
+
+`--plot` renders a four-panel report, chosen to answer the questions that
+actually decide whether a strategy is worth running:
+
+1. **Growth of capital** — strategy against buy-and-hold, on one shared axis.
+   Log scale past a 5x range, so equal percentage moves look equal instead of
+   letting a late doubling dwarf an early one.
+2. **Peak-to-trough loss** — what holding it would have *felt* like. A CAGR
+   number hides the part that makes people capitulate at the bottom.
+3. **Rolling Sharpe** — whether the edge persisted or came from one lucky
+   stretch. This is where most strategies quietly fall apart, and a single
+   headline Sharpe cannot show it.
+4. **Capital deployed** — when it was in the market, and where the drawdown
+   guard stood it down.
+
+The strategy is blue and the benchmark is orange in every panel, so colour
+always identifies the same entity. The pair is validated for colour-vision
+deficiency (worst-pair ΔE 24.7, against a threshold of 8). Charts render on an
+opaque light background because a transparent PNG renders dark-on-dark in chat
+apps set to dark mode.
+
+The footer states the comparison in plain numbers rather than a single verdict
+word, because **Sharpe ranking inverts when both returns are negative** — losing
+4% with shallow drawdowns scores a *worse* Sharpe than losing 27% with violent
+ones, and ranking on Sharpe alone would advise holding the asset that halved.
 
 ## Phone alerts
 
@@ -185,7 +217,7 @@ means the edge is smaller than you think.
 
 ## Current status
 
-* 58 tests pass, including a leak test that is itself verified: introducing a
+* 66 tests pass, including a leak test that is itself verified: introducing a
   deliberate lookahead bug makes it fail and names the offending feature.
 * The full pipeline is exercised end to end offline via `selftest`.
 * **The strategy has never been run on real market data.** The sandbox this was
@@ -203,7 +235,7 @@ quantbot/
   config.py      data/          features.py   labels.py
   validation.py  model.py       risk.py       backtest.py
   metrics.py     signals.py     portfolio.py  notify/      cli.py
-tests/           58 tests, including lookahead and leakage checks
+tests/           66 tests, including lookahead and leakage checks
 .github/workflows/
   signals.yml    hourly signal run + alert
   tests.yml      CI on every push

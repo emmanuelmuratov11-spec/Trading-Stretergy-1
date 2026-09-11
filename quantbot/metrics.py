@@ -212,6 +212,47 @@ def compute(returns: pd.Series, equity: pd.Series, bars_per_year: float,
     )
 
 
+def compare_to_benchmark(strategy: Metrics, benchmark: Metrics) -> tuple[bool, str]:
+    """Judge a strategy against buy-and-hold. Returns (is_better, explanation).
+
+    Sharpe alone is NOT sufficient here, and getting this wrong is dangerous.
+    When both return streams are negative the Sharpe ordering inverts: losing
+    less money with lower volatility can score a *worse* Sharpe than losing
+    more with higher volatility, because dividing a negative mean by a smaller
+    standard deviation makes it more negative. A naive comparison then tells
+    the user to hold an asset that halved, which is the opposite of the truth.
+
+    So: when both are losing, rank by capital preserved and drawdown endured.
+    When returns are positive, Sharpe is the right risk-adjusted measure.
+    """
+    s_ret, b_ret = strategy.total_return, benchmark.total_return
+    s_dd, b_dd = strategy.max_drawdown, benchmark.max_drawdown
+
+    facts = (f"Strategy {s_ret:+.1%} vs buy & hold {b_ret:+.1%}"
+             f"  ·  max drawdown {s_dd:.1%} vs {b_dd:.1%}"
+             f"  ·  Sharpe {strategy.sharpe:.2f} vs {benchmark.sharpe:.2f}")
+
+    if s_ret <= 0 and b_ret <= 0:
+        # Both lost. The only meaningful question is which lost less, and hurt
+        # less on the way. Sharpe is not trustworthy in this regime.
+        better = s_ret > b_ret and s_dd >= b_dd
+        verdict = ("Lost less than buy & hold, with shallower drawdowns - but "
+                   "both lost money" if better else
+                   "Did not beat buy & hold")
+        return better, f"{verdict}.\n{facts}"
+
+    if s_ret > 0 and b_ret <= 0:
+        return True, f"Made money while buy & hold lost.\n{facts}"
+
+    if s_ret <= 0 and b_ret > 0:
+        return False, f"Lost money while buy & hold gained.\n{facts}"
+
+    better = strategy.sharpe > benchmark.sharpe
+    verdict = ("Beats buy & hold on risk-adjusted return" if better
+               else "Does NOT beat buy & hold - holding the benchmark was better")
+    return better, f"{verdict}.\n{facts}"
+
+
 def format_report(m: Metrics, title: str = "Strategy") -> str:
     pct = lambda x: f"{x * 100:,.2f}%"
     return "\n".join([

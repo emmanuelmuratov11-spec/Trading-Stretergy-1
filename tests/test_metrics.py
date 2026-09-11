@@ -44,3 +44,36 @@ def test_turnover_is_reported_from_weights():
     eq = (1 + r).cumprod() * 100
     w = pd.DataFrame({"a": [0.0, 1.0, 0.0, 1.0]}, index=idx)
     assert metrics.compute(r, eq, 8760, weights=w).turnover > 0
+
+
+def _m(total_return, max_dd, sharpe):
+    from quantbot.metrics import zero_metrics
+    m = zero_metrics()
+    return type(m)(**{**m.to_dict(), "total_return": total_return,
+                      "max_drawdown": max_dd, "sharpe": sharpe})
+
+
+def test_losing_less_is_not_reported_as_losing_to_the_benchmark():
+    """Sharpe ordering inverts when both streams are negative: dividing a
+    negative mean by a smaller std makes it MORE negative. Ranking on Sharpe
+    alone would advise holding an asset that lost far more."""
+    strategy = _m(-0.04, -0.07, -0.55)     # lost 4%, shallow drawdown
+    benchmark = _m(-0.27, -0.59, -0.29)    # lost 27%, brutal drawdown
+    better, text = metrics.compare_to_benchmark(strategy, benchmark)
+    assert better, "preserving capital must not be scored as a loss to the benchmark"
+    assert "both lost money" in text, "it must still say that both lost money"
+
+
+def test_positive_returns_are_ranked_on_sharpe():
+    better, _ = metrics.compare_to_benchmark(_m(0.5, -0.2, 1.8), _m(0.6, -0.5, 1.1))
+    assert better, "higher risk-adjusted return should win when both are positive"
+
+
+def test_making_money_beats_a_losing_benchmark():
+    better, text = metrics.compare_to_benchmark(_m(0.10, -0.05, 0.9), _m(-0.30, -0.6, -0.4))
+    assert better and "while buy & hold lost" in text
+
+
+def test_losing_money_never_beats_a_winning_benchmark():
+    better, text = metrics.compare_to_benchmark(_m(-0.10, -0.2, -0.5), _m(0.40, -0.3, 1.2))
+    assert not better and "Lost money" in text

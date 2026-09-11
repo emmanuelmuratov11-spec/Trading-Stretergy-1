@@ -20,3 +20,7 @@ class Notifier(Protocol):
     enabled: bool
 
     def send(self, alert: Alert) -> bool: ...
+
+    def send_photo(self, path: str, caption: str = "") -> bool:
+        """Deliver an image. Channels that cannot are free to return False."""
+        ...

@@ -18,7 +18,7 @@ import sys
 from quantbot.config import Config
 from quantbot.data import load_universe
 from quantbot.data.loader import align
-from quantbot.notify import build_notifiers, send_all
+from quantbot.notify import build_notifiers, send_all, send_photo_all
 from quantbot.portfolio import Portfolio
 from quantbot.risk import DrawdownGuard
 
@@ -59,6 +59,11 @@ def cmd_backtest(cfg: Config, args) -> int:
             json.dump(payload, fh, indent=2)
         log.info("wrote %s", args.json_out)
 
+    if args.plot:
+        from quantbot import plotting
+        plotting.render_backtest(res, cfg, args.plot,
+                                 title=f"{', '.join(cfg.data.symbols)} backtest")
+
     if args.equity_out:
         os.makedirs(os.path.dirname(args.equity_out) or ".", exist_ok=True)
         res.equity.to_frame("equity").join(
@@ -66,9 +71,10 @@ def cmd_backtest(cfg: Config, args) -> int:
         log.info("wrote %s", args.equity_out)
 
     # A strategy that does not beat buy-and-hold is not worth its risk.
-    if res.metrics.sharpe <= res.benchmark_metrics.sharpe:
-        log.warning("strategy Sharpe (%.2f) does NOT beat buy & hold (%.2f)",
-                    res.metrics.sharpe, res.benchmark_metrics.sharpe)
+    from quantbot.metrics import compare_to_benchmark
+    better, verdict = compare_to_benchmark(res.metrics, res.benchmark_metrics)
+    if not better:
+        log.warning("%s", verdict)
     if res.metrics.dsr < 0.90:
         log.warning("deflated Sharpe %.3f is below 0.90 -- this result is NOT "
                     "statistically distinguishable from luck", res.metrics.dsr)
@@ -111,6 +117,16 @@ def _run_live(cfg: Config, args, mode: str) -> int:
         log.info("alert delivery: %s", results)
         if not any(results.values()):
             log.error("every alert channel failed")
+
+        if args.plot:
+            try:
+                from quantbot import plotting
+                chart = plotting.render_portfolio(pf, cfg, args.plot)
+                if chart:
+                    send_photo_all(notifiers, chart, "Paper portfolio to date")
+            except Exception as exc:
+                # A chart is a nicety; never let it sink the alert that matters.
+                log.warning("chart rendering failed (alert already sent): %s", exc)
     else:
         log.info("nothing material changed; no alert sent")
 
@@ -146,6 +162,11 @@ def cmd_report(cfg: Config, args) -> int:
     for s, p in sorted(pf.positions.items()):
         if abs(p.qty) > 1e-10:
             print(f"  {s:12s} {p.qty:.6g} @ {p.avg_price:,.2f}")
+
+    if args.plot:
+        from quantbot import plotting
+        out = plotting.render_portfolio(pf, cfg, args.plot)
+        print(f"\nchart: {out}" if out else "\nnot enough history to chart yet")
     return 0
 
 
@@ -166,6 +187,11 @@ def cmd_selftest(cfg: Config, args) -> int:
     print(res.summary())
     print("\nNOTE: these numbers come from SYNTHETIC data. They prove the code "
           "runs; they say nothing whatsoever about real profitability.\n")
+
+    from quantbot import plotting
+    chart = plotting.render_backtest(res, cfg, "reports/selftest.png",
+                                     title="Selftest (synthetic data)")
+    print(f"chart rendered: {chart}")
 
     from quantbot import signals
     sig = signals.generate(cfg, frames)
@@ -190,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="number of configurations you have tested; inflates the "
                          "deflated-Sharpe haircut. Be honest with this.")
     ap.add_argument("--min-notional", type=float, default=10.0)
+    ap.add_argument("--plot", nargs="?", const="reports/report.png", default="",
+                    help="render charts to this PNG path "
+                         "(default reports/report.png); live runs also send it")
     ap.add_argument("--json-out", default="")
     ap.add_argument("--equity-out", default="")
     args = ap.parse_args(argv)

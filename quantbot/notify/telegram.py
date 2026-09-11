@@ -46,3 +46,18 @@ class TelegramNotifier:
             log.error("telegram send failed %s: %s", resp.status_code, resp.text[:200])
             return False
         return True
+
+    def send_photo(self, path: str, caption: str = "") -> bool:
+        if not self.enabled or not os.path.exists(path):
+            return False
+        with open(path, "rb") as fh:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{self.token}/sendPhoto",
+                data={"chat_id": self.chat_id, "caption": caption[:1000]},
+                files={"photo": (os.path.basename(path), fh, "image/png")},
+                timeout=60,
+            )
+        if resp.status_code != 200:
+            log.error("telegram photo failed %s: %s", resp.status_code, resp.text[:200])
+            return False
+        return True

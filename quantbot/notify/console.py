@@ -13,3 +13,7 @@ class ConsoleNotifier:
         bar = "=" * 60
         print(f"\n{bar}\n{alert.title}\n{bar}\n{alert.body}\n{bar}\n", flush=True)
         return True
+
+    def send_photo(self, path: str, caption: str = "") -> bool:
+        print(f"[chart] {path}" + (f"  -- {caption}" if caption else ""), flush=True)
+        return True
