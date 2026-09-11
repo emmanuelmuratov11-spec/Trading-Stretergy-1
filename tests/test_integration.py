@@ -156,3 +156,22 @@ def test_throttled_schedule_never_raises_turnover(cfg):
     cfg.costs.rebalance_every = 1
     every_bar = backtest.run(cfg, frames)
     assert throttled.metrics.turnover <= every_bar.metrics.turnover + 1e-9
+
+
+def test_summary_reports_actual_trade_statistics(cfg):
+    """The printed report must carry the trade win rate, not only the bar-level
+    hit rate. This regressed once silently: the stats were computed and stored
+    but never rendered, so the run logs showed no trades section at all."""
+    res = backtest.run(cfg, _frames(cfg))
+    text = res.summary()
+    assert "ACTUAL ROUND-TRIP TRADES" in text
+    assert "WIN RATE" in text or "no completed trades" in text
+    assert "Expectancy" in text or "no completed trades" in text
+
+
+def test_trade_stats_are_populated_on_the_result(cfg):
+    res = backtest.run(cfg, _frames(cfg))
+    assert res.trades is not None
+    if res.trades.n_trades > 0:
+        assert 0.0 <= res.trades.win_rate <= 1.0
+        assert res.trades.ci_low <= res.trades.win_rate <= res.trades.ci_high
