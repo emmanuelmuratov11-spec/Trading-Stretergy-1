@@ -28,6 +28,7 @@ from quantbot.labels import binary_target, triple_barrier
 from quantbot.metrics import Metrics, compute as compute_metrics
 from quantbot.model import WalkForwardModel
 from quantbot.strategies import probabilities as engine_probabilities
+from quantbot.trades import TradeStats, extract as extract_trades, summarise as summarise_trades
 from quantbot.risk import (
     DrawdownGuard, apply_portfolio_limits, covariance_path, edge_to_weight,
     portfolio_vol_scalar, smooth_scalar, volatility_scalar,
@@ -49,6 +50,7 @@ class BacktestResult:
     benchmark_metrics: Metrics
     halted_bars: int = 0
     diagnostics: dict = field(default_factory=dict)
+    trades: TradeStats = field(default_factory=TradeStats)
 
     def summary(self) -> str:
         from quantbot.metrics import compare_to_benchmark, format_report
@@ -243,6 +245,15 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
     bench_ret = frames[bench_sym]["close"].pct_change().reindex(index).fillna(0.0)
     bench_eq = (1.0 + bench_ret).cumprod() * cfg.initial_capital
 
+    # Reconstruct the trades that were actually taken. The bar-level hit rate
+    # in `metrics` is not the success rate of a trade, and reporting only the
+    # former invites exactly that confusion.
+    price_frame = pd.DataFrame({s: frames[s]["close"] for s in symbols}).reindex(index)
+    trade_stats = summarise_trades(extract_trades(
+        applied, price_frame,
+        cost_per_turn=(cfg.costs.taker_fee_bps + cfg.costs.half_spread_bps) / 10_000.0,
+    ))
+
     return BacktestResult(
         equity=equity_s,
         returns=returns_s,
@@ -254,4 +265,5 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
         benchmark_metrics=compute_metrics(bench_ret, bench_eq, bpy, n_trials=1),
         halted_bars=halted_bars,
         diagnostics=diagnostics,
+        trades=trade_stats,
     )

@@ -51,6 +51,7 @@ def cmd_backtest(cfg: Config, args) -> int:
     if args.json_out:
         payload = {
             "strategy": res.metrics.to_dict(),
+            "trades": res.trades.to_dict(),
             "benchmark": res.benchmark_metrics.to_dict(),
             "diagnostics": res.diagnostics,
             "halted_bars": res.halted_bars,
