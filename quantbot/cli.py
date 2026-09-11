@@ -136,7 +136,7 @@ def _run_live(cfg: Config, args, mode: str) -> int:
             ts=now, symbol=sym, engine=cfg.model.kind, prob=prob,
             target_weight=sig.targets.get(sym, 0.0), price=sig.prices[sym],
             horizon_bars=cfg.labels.horizon_bars, bar_minutes=bar_minutes,
-            sigma=sig.sigmas.get(sym, 0.0),
+            sigma=sig.sigmas.get(sym, 0.0), context=sig.context.get(sym, {}),
         )
 
     alert = signals.format_alert(sig, orders, pf, cfg, mode=mode,
@@ -200,9 +200,11 @@ def cmd_report(cfg: Config, args) -> int:
 
     journal = Journal.load(os.path.join(cfg.state_dir, "journal.json"))
     if journal.predictions:
-        from quantbot.journal import format_scorecard
+        from quantbot.journal import format_attribution, format_scorecard
         print()
         print(format_scorecard(journal))
+        print()
+        print(format_attribution(journal))
 
     if args.plot:
         from quantbot import plotting

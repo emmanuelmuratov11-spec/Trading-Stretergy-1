@@ -145,3 +145,77 @@ def test_scorecard_renders_before_anything_is_graded():
              engine="ml", prob=0.6, target_weight=0.2, price=100.0,
              horizon_bars=24, bar_minutes=60)
     assert "no calls graded yet" in format_scorecard(j)
+
+
+def _call(j, i, *, correct, vol, trend_z=0.0, dd=-0.01, symbol="BTC/USD",
+          prob=0.65, weight=0.3, ret=0.01):
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    p = j.record(ts=t0 + timedelta(hours=i), symbol=symbol, engine="ml",
+                 prob=prob, target_weight=weight, price=100.0, horizon_bars=1,
+                 bar_minutes=60,
+                 context={"vol": vol, "trend_z": trend_z, "drawdown": dd})
+    p.resolved = True
+    p.realised_return = ret if correct else -ret
+    p.correct = correct
+    p.pnl_weight = (ret if correct else -ret) * weight
+    return p
+
+
+def test_attribution_finds_a_regime_specific_failure():
+    """The headline hit rate can hide everything that matters: a model can be
+    predictive in calm markets and harmful in violent ones, and the blended
+    average shows neither."""
+    j = Journal()
+    for i in range(60):
+        _call(j, i, correct=True, vol=0.3)             # calm: right
+    for i in range(60, 120):
+        _call(j, i, correct=False, vol=1.2)            # wild: wrong
+
+    overall = j.scorecard()
+    assert 0.45 < overall["hit_rate"] < 0.55, "blended rate should look like noise"
+
+    bands = {r["key"]: r for r in j.attribution()["volatility regime"]}
+    assert bands["calm <50%"]["verdict"] == "works"
+    assert bands["wild >90%"]["verdict"] == "fails"
+
+    findings = " | ".join(j.diagnosis())
+    assert "calm" in findings and "wild" in findings
+
+
+def test_thin_buckets_are_flagged_not_trusted():
+    j = Journal()
+    for i in range(5):
+        _call(j, i, correct=True, vol=0.3)
+    rows = j.attribution(min_n=20)["volatility regime"]
+    assert rows[0]["thin"] is True
+    assert "no condition has enough evidence yet" in " ".join(j.diagnosis(min_n=20))
+
+
+def test_attribution_splits_by_symbol_and_trend():
+    j = Journal()
+    for i in range(40):
+        _call(j, i, correct=True, vol=0.4, trend_z=1.5, symbol="BTC/USD")
+    for i in range(40, 80):
+        _call(j, i, correct=False, vol=0.4, trend_z=-1.5, symbol="ETH/USD")
+    attr = j.attribution()
+    assert {r["key"] for r in attr["symbol"]} == {"BTC/USD", "ETH/USD"}
+    assert {r["key"] for r in attr["trend regime"]} == {"uptrend", "downtrend"}
+
+
+def test_context_survives_persistence(tmp_path):
+    j = Journal()
+    _call(j, 0, correct=True, vol=0.42, trend_z=1.1)
+    path = str(tmp_path / "j.json")
+    j.save(path)
+    back = Journal.load(path)
+    assert back.predictions[0].context["vol"] == pytest.approx(0.42)
+    assert back.predictions[0].context["trend_z"] == pytest.approx(1.1)
+
+
+def test_attribution_renders_without_crashing():
+    from quantbot.journal import format_attribution
+    j = Journal()
+    for i in range(30):
+        _call(j, i, correct=i % 2 == 0, vol=0.6)
+    text = format_attribution(j)
+    assert "WHY IT WORKS / FAILS" in text and "volatility regime" in text

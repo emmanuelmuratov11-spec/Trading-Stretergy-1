@@ -48,6 +48,9 @@ class Prediction:
     horizon_bars: int
     resolve_at: str          # when it should be graded
     sigma: float = 0.0
+    # Market conditions at the moment of the call, so failures can later be
+    # attributed to a regime rather than left as "it just did not work".
+    context: dict = field(default_factory=dict)
     # Filled in at resolution time:
     resolved: bool = False
     exit_price: float | None = None
@@ -80,7 +83,8 @@ class Journal:
 
     def record(self, ts: datetime, symbol: str, engine: str, prob: float,
                target_weight: float, price: float, horizon_bars: int,
-               bar_minutes: int, sigma: float = 0.0) -> Prediction:
+               bar_minutes: int, sigma: float = 0.0,
+               context: dict | None = None) -> Prediction:
         resolve_at = ts + timedelta(minutes=bar_minutes * horizon_bars)
         p = Prediction(
             id=f"{symbol.replace('/', '')}-{int(ts.timestamp())}",
@@ -88,6 +92,7 @@ class Journal:
             prob=float(prob), target_weight=float(target_weight),
             entry_price=float(price), horizon_bars=int(horizon_bars),
             resolve_at=resolve_at.isoformat(), sigma=float(sigma),
+            context=dict(context or {}),
         )
         # Re-running the same bar must not double-count a call.
         if not any(x.id == p.id for x in self.predictions):
@@ -175,6 +180,101 @@ class Journal:
             })
         return out
 
+    # ---------- attribution: WHY it works or does not ----------
+
+    def _bucket_stats(self, group: list) -> dict:
+        n = len(group)
+        wins = sum(1 for p in group if p.correct)
+        lo, hi = wilson_interval(wins, n)
+        return {
+            "n": n, "hit_rate": wins / n if n else 0.0,
+            "ci_low": lo, "ci_high": hi,
+            "pnl": sum(p.pnl_weight or 0.0 for p in group),
+            "avg_move": sum(abs(p.realised_return or 0.0) for p in group) / n if n else 0.0,
+            # Only call a bucket good or bad when the interval excludes chance.
+            "verdict": ("works" if lo > 0.5 else "fails" if hi < 0.5 else "unproven"),
+        }
+
+    def attribution(self, min_n: int = 20) -> dict[str, list[dict]]:
+        """Break the record down by the conditions each call was made under.
+
+        A single overall hit rate hides everything useful. A model can be
+        genuinely predictive in calm markets and actively harmful in volatile
+        ones, and the blended average will show neither. Each bucket carries
+        its own interval, and buckets thinner than `min_n` are reported but
+        flagged unproven rather than acted on.
+        """
+        rs = self.resolved()
+        out: dict[str, list[dict]] = {}
+
+        def group_by(name: str, keyfn):
+            buckets: dict[str, list] = {}
+            for p in rs:
+                try:
+                    k = keyfn(p)
+                except Exception:
+                    continue
+                if k is None:
+                    continue
+                buckets.setdefault(str(k), []).append(p)
+            rows = []
+            for k, g in sorted(buckets.items()):
+                st = self._bucket_stats(g)
+                st["key"] = k
+                st["thin"] = st["n"] < min_n
+                rows.append(st)
+            if rows:
+                out[name] = rows
+
+        group_by("symbol", lambda p: p.symbol)
+        group_by("engine", lambda p: p.engine)
+        group_by("direction", lambda p: "long" if p.target_weight > 1e-9 else "flat")
+
+        def vol_band(p):
+            v = p.context.get("vol")
+            if v is None:
+                return None
+            return "calm <50%" if v < 0.5 else "normal 50-90%" if v < 0.9 else "wild >90%"
+        group_by("volatility regime", vol_band)
+
+        def trend_band(p):
+            t = p.context.get("trend_z")
+            if t is None:
+                return None
+            return "downtrend" if t < -0.5 else "flat" if t < 0.5 else "uptrend"
+        group_by("trend regime", trend_band)
+
+        def dd_band(p):
+            d = p.context.get("drawdown")
+            if d is None:
+                return None
+            return "near highs" if d > -0.05 else "off highs" if d > -0.20 else "deep drawdown"
+        group_by("drawdown regime", dd_band)
+
+        return out
+
+    def diagnosis(self, min_n: int = 20) -> list[str]:
+        """Plain-language findings: only conditions the evidence actually supports."""
+        findings: list[str] = []
+        attr = self.attribution(min_n=min_n)
+        for dimension, rows in attr.items():
+            for r in rows:
+                if r["thin"] or r["verdict"] == "unproven":
+                    continue
+                verb = "predicts well" if r["verdict"] == "works" else "is worse than a coin flip"
+                findings.append(
+                    f"{dimension}={r['key']}: {verb} "
+                    f"({r['hit_rate']:.0%} over {r['n']} calls, "
+                    f"95% CI {r['ci_low']:.0%}-{r['ci_high']:.0%}, pnl {r['pnl']:+.4f})"
+                )
+        if not findings:
+            graded = len(self.resolved())
+            findings.append(
+                f"no condition has enough evidence yet ({graded} calls graded; "
+                f"each bucket needs {min_n}+ before it is worth believing)"
+            )
+        return findings
+
     # ---------- adaptation ----------
 
     def risk_multiplier(self, min_samples: int = 60) -> tuple[float, str]:
@@ -227,6 +327,27 @@ class Journal:
             ])
         except Exception:
             return cls()
+
+
+def format_attribution(journal: Journal, min_n: int = 20) -> str:
+    """The 'why' block: where the calls land well and where they do not."""
+    attr = journal.attribution(min_n=min_n)
+    if not attr:
+        return "WHY IT WORKS / FAILS\n  nothing graded yet"
+    lines = ["WHY IT WORKS / FAILS (graded calls, by condition)"]
+    for dimension, rows in attr.items():
+        lines.append(f"  {dimension}:")
+        for r in rows:
+            flag = "  (thin)" if r["thin"] else ""
+            lines.append(
+                f"    {r['key']:16s} n={r['n']:4d}  hit {r['hit_rate']:5.0%}  "
+                f"[{r['ci_low']:.0%}-{r['ci_high']:.0%}]  pnl {r['pnl']:+.4f}  "
+                f"{r['verdict']}{flag}"
+            )
+    lines.append("  Findings:")
+    for f in journal.diagnosis(min_n=min_n):
+        lines.append(f"    - {f}")
+    return "\n".join(lines)
 
 
 def format_scorecard(journal: Journal) -> str:

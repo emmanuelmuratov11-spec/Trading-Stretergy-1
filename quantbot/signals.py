@@ -40,6 +40,9 @@ class SignalSet:
     sigmas: dict[str, float]
     stops: dict[str, float]
     vols: dict[str, float]
+    # Market conditions per symbol at call time, carried into the journal so a
+    # later post-mortem can ask which regimes the model is actually good in.
+    context: dict[str, dict] = field(default_factory=dict)
     staleness_minutes: float = 0.0
     warnings: list[str] = field(default_factory=list)
 
@@ -56,6 +59,7 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
     sigmas: dict[str, float] = {}
     vols: dict[str, float] = {}
     prices: dict[str, float] = {}
+    context: dict[str, dict] = {}
 
     asof = min(df.index[-1] for df in frames.values())
 
@@ -82,6 +86,19 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
         sigmas[sym] = sig
         v = realised_vol(df["close"], cfg.labels.vol_window, bpy).iloc[-1]
         vols[sym] = float(v) if np.isfinite(v) else cfg.risk.vol_ceiling
+
+        # Regime snapshot: how volatile, how trending, how far off the highs.
+        close = df["close"]
+        logret = np.log(close).diff()
+        lb = min(168, max(len(close) // 4, 10))
+        mom = float(np.log(close).diff(lb).iloc[-1])
+        mvol = float(logret.ewm(span=lb, adjust=False, min_periods=5).std().iloc[-1] * np.sqrt(lb))
+        roll_max = float(close.rolling(min(336, len(close)), min_periods=1).max().iloc[-1])
+        context[sym] = {
+            "vol": vols[sym],
+            "trend_z": (mom / mvol) if np.isfinite(mvol) and mvol > 1e-12 else 0.0,
+            "drawdown": float(close.iloc[-1] / roll_max - 1.0) if roll_max > 0 else 0.0,
+        }
 
         # The final `horizon_bars` rows have labels that cannot have resolved
         # yet, so they must not be trained on.
@@ -127,7 +144,7 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
         )
 
     return SignalSet(asof=asof, prices=prices, probabilities=probs, targets=targets,
-                     sigmas=sigmas, stops=stops, vols=vols,
+                     sigmas=sigmas, stops=stops, vols=vols, context=context,
                      staleness_minutes=staleness, warnings=warnings)
 
 
@@ -187,6 +204,12 @@ def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
         from quantbot.journal import format_scorecard
         lines.append("")
         lines.append(format_scorecard(journal))
+        findings = journal.diagnosis()
+        if findings:
+            lines.append("")
+            lines.append("WHY (conditions the evidence supports)")
+            for f in findings:
+                lines.append(f"  - {f}")
 
     if sig.warnings:
         lines.append("")
