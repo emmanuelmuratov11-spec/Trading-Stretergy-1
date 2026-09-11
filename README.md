@@ -21,9 +21,9 @@ publish it. What follows is the honest version of what this repository is.
   deflated Sharpe ratio that penalises you for the number of variants you have
   tried. Those tools do not make a backtest proof — they only make it less of
   a lie.
-* **The default configuration loses money on real data.** That is measured,
-  not feared: −23.3% against −8.2% for buy-and-hold over 18 months of BTC/ETH/SOL.
-  See "Current status" for the full table and the diagnosis.
+* **Buy-and-hold beat every strategy in this repository on real data.** SPY
+  returned +113.7% with a Sharpe of 1.31 while the best strategy here managed
+  +23.5% and 0.67. That is measured, not feared. See "Current status".
 * **Only risk money you can lose entirely.** Not rent, not savings, not
   borrowed money. Leverage is capped at 1.0 by default; raising it is how
   accounts go to zero.
@@ -294,7 +294,43 @@ means the edge is smaller than you think.
   deliberate lookahead bug makes it fail and names the offending feature.
 * The full pipeline is exercised end to end offline via `selftest`.
 
-### It has now been run on real data, and it lost money
+### The honest bottom line: buy-and-hold beat everything here
+
+Measured on real data, the best thing this repository does is tell you not to
+use it. The diversified multi-asset trend book — the most defensible strategy
+in the project, chosen for a 40-year out-of-sample prior rather than a fitted
+backtest — was run across 12 markets over ~4 years:
+
+| | Diversified trend | SPY buy & hold |
+|---|---|---|
+| Total return | +23.5% | **+113.7%** |
+| CAGR | 5.6% | **21.5%** |
+| Sharpe | 0.67 | **1.31** |
+| Max drawdown | **−11.1%** | −19.0% |
+| Annual vol | **8.6%** | 15.7% |
+| Hit rate | 54.9% | — |
+| P(true Sharpe > 0) | 0.904 | 0.996 |
+| Deflated Sharpe | 0.638 | **0.996** |
+
+The strategy made money, won on drawdown and volatility, and has a 90% chance
+of a genuinely positive Sharpe — the first thing in this project that can say
+that. **And it still lost badly to a single index fund**, on both absolute and
+risk-adjusted return, while charging you 25x annual turnover in costs and a
+great deal of complexity for the privilege.
+
+That is not a bug to fix. It is the finding. If you want the most likely route
+to making money from this repository, it is the benchmark column.
+
+**What would change that verdict:** this sample is one regime — a strong
+post-2022 equity bull market, which is the worst possible environment for a
+long-only diversified trend book, because diversifying away from the
+best-performing asset costs you precisely while that asset keeps winning.
+Trend following earns its reputation in 2000-2002, 2008 and 2022, none of which
+are in this window. Note also that SPY's own deflated Sharpe of 0.996 is far
+more statistically solid than the strategy's 0.638 — the index's track record
+is better evidenced, not just better.
+
+### The crypto runs, for completeness
 
 First real backtest: **BTC/ETH/SOL, hourly, 13,021 bars (~18 months) of
 Coinbase data**, walk-forward, out-of-sample, after costs.
