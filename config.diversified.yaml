@@ -1,0 +1,81 @@
+# Diversified multi-asset trend portfolio.
+#
+# This is the managed-futures formula: a simple trend rule applied across many
+# markets that do NOT move together. It is here because it has the strongest
+# prior of anything available - trend following across diversified futures has
+# roughly four decades of live, out-of-sample track record across dozens of
+# funds, which is evidence of a completely different quality from a backtest
+# fitted on this dataset.
+#
+# The point is the correlation structure, not the signal. Holding three crypto
+# majors is one bet wearing three hats; they fall together. Bonds, gold and
+# equities do not, so the same trend rule spread across them produces a smoother
+# equity curve for the same expected return. That improvement is close to
+# arithmetic rather than a prediction, which is why it is worth more than yet
+# another attempt to forecast direction.
+
+data:
+  source: stooq
+  symbols:
+    - "SPY"    # US large cap equities
+    - "IWM"    # US small cap - different cycle to large cap
+    - "EFA"    # developed international equities
+    - "EEM"    # emerging markets
+    - "TLT"    # 20y+ Treasuries - usually rallies when equities fall
+    - "IEF"    # 7-10y Treasuries
+    - "GLD"    # gold - the classic crisis diversifier
+    - "SLV"    # silver - industrial/precious hybrid
+    - "DBC"    # broad commodities - the inflation leg
+    - "UUP"    # US dollar index
+    - "VNQ"    # real estate
+    - "HYG"    # high yield credit
+  timeframe: "1d"
+  lookback_days: 2200         # ~6 years, enough to span several regimes
+  cache_dir: data_cache
+  benchmark: "SPY"
+  annual_days: 252
+  asset_class: equity
+
+labels:
+  horizon_bars: 5
+  upper_sigma: 1.5
+  lower_sigma: 1.5
+  vol_window: 20
+
+model:
+  kind: trend
+  trend_lookbacks: [20, 60, 120, 250]   # month, quarter, half, year
+  trend_scale: 1.5
+  train_bars: 500
+  min_train_bars: 200
+  retrain_every: 20
+  embargo_bars: 5
+
+risk:
+  target_annual_vol: 0.12     # a diversified book needs far less leverage
+  max_gross_leverage: 1.0
+  max_position_weight: 0.20   # no single market dominates the book
+  kelly_fraction: 0.30
+  conviction_deadband: 0.03
+  allow_shorts: false
+  max_drawdown_stop: 0.20
+  drawdown_recovery: 0.08
+  cov_span: 120               # correlations move slowly; measure them slowly
+  scalar_smoothing: 10
+
+costs:
+  taker_fee_bps: 1.0
+  half_spread_bps: 3.0        # DBC/UUP are thinner than SPY
+  slippage_coef: 0.25
+  min_trade_weight: 0.02
+  rebalance_band: 0.30
+  rebalance_every: 1
+
+alerts:
+  channels: ["console", "telegram"]
+  min_weight_change: 0.04
+  send_heartbeat: false
+
+initial_capital: 10000.0
+state_dir: state/diversified
+seed: 7

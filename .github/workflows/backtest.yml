@@ -22,7 +22,7 @@ on:
   push:
     paths:
       - "quantbot/**"
-      - "config.yaml"
+      - "config*.yaml"
       - "scripts/**"
       - ".github/workflows/backtest.yml"
 
@@ -91,6 +91,20 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: How many independent bets does each book hold?
+        if: always()
+        run: |
+          python scripts/diversification.py 2>&1 | tee diversification_log.txt
+
+      - name: Diversified multi-asset backtest on real data
+        if: always()
+        run: |
+          python -m quantbot backtest -c config.diversified.yaml \
+            --trials 8 \
+            --plot reports/diversified.png \
+            --json-out reports/diversified_metrics.json \
+            -v 2>&1 | tee diversified_log.txt
+
       - name: Pre-registered strategy comparison (dev vs holdout)
         if: always()
         run: |
@@ -101,6 +115,14 @@ jobs:
         if: always()
         run: |
           {
+            echo "## Diversification"
+            echo '```'
+            cat diversification_log.txt 2>/dev/null | head -30
+            echo '```'
+            echo "## Diversified multi-asset backtest"
+            echo '```'
+            sed -n '/--- STRATEGY/,$p' diversified_log.txt 2>/dev/null | head -45
+            echo '```'
             echo "## Strategy comparison (real data, dev vs holdout)"
             echo '```'
             sed -n '/PRE-REGISTERED COMPARISON/,$p' compare_log.txt | head -40
@@ -115,5 +137,7 @@ jobs:
             reports/
             reports_log.txt
             compare_log.txt
+            diversified_log.txt
+            diversification_log.txt
           if-no-files-found: warn
           retention-days: 30
