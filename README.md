@@ -62,6 +62,7 @@ of 2021. It does not mean the system becomes reliably profitable over time.
 | `metrics.py` | Sharpe, Sortino, Calmar — plus PSR and DSR, which haircut your Sharpe for luck and for multiple testing. |
 | `signals.py` | Live signals, sharing one implementation with the backtest so the two cannot drift apart. |
 | `plotting.py` | Four-panel visual report, delivered to your phone as an image. |
+| `scripts/overfit_demo.py` | Proves how easily a search manufactures a great backtest from pure noise. |
 
 ### Design decisions worth knowing about
 
@@ -187,6 +188,38 @@ this branch is merged, trigger it manually from the Actions tab
 silence should never be ambiguous.
 
 ---
+
+## Before you trust any backtest, including this one
+
+```bash
+python scripts/overfit_demo.py --trials 30
+```
+
+This searches 30 strategy configurations on a **driftless random walk** — a
+price series with mathematically zero predictable edge — and reports the best
+one, then re-runs that same winner on a later slice it was not selected on.
+
+A representative result:
+
+```
+BEST OF 30 on the search period        Sharpe  +2.98
+THE SAME CONFIG, on unseen data        Sharpe  -2.48
+```
+
+A Sharpe of +2.98 is hedge-fund-grade on paper, and it was produced on a coin
+flip, by the same purged walk-forward backtester with the same honest costs
+used everywhere else in this repo. Nothing was learned, because there was
+nothing to learn: with thousands of bars and dozens of parameters, some
+configuration's noise always lines up.
+
+That is precisely what "keep tuning until the backtest looks good" does. Search
+harder and the winner looks *better* and is *more* fake. On real data the
+failure is identical, minus the giveaway — you find out by losing money.
+
+So: raise `--trials` honestly, and treat a great backtest as a reason for
+suspicion rather than excitement. Changes that plug a cost leak (turnover,
+fees, slippage) tend to survive out of sample. Changes that make the equity
+curve prettier by loosening risk limits do not.
 
 ## How to evaluate this honestly
 
