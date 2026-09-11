@@ -92,3 +92,45 @@ def test_covariance_path_is_causal():
     full = covariance_path(r, 100, 8760)
     trunc = covariance_path(r.iloc[:300], 100, 8760)
     assert np.allclose(full[299], trunc[-1], rtol=1e-9), "covariance saw the future"
+
+
+def test_schedule_holds_increases_but_lets_reductions_through():
+    """The mechanism directly: between scheduled bars a symbol being added to
+    is held, while a symbol being trimmed moves immediately. Testing this via
+    an aggregate turnover ratio is fragile, because whichever no-trade band
+    happens to bind first changes the size of the effect."""
+    from quantbot.risk import apply_rebalance_schedule
+    prev = pd.Series({"UP": 0.10, "DOWN": 0.40, "FLAT": 0.20})
+    target = pd.Series({"UP": 0.30, "DOWN": 0.05, "FLAT": 0.20})
+
+    held = apply_rebalance_schedule(target, prev, bar_index=7, every=24,
+                                    trading_allowed=True)
+    assert held["UP"] == 0.10, "an increase must wait for the scheduled bar"
+    assert held["DOWN"] == 0.05, "a reduction must never be delayed"
+    assert held["FLAT"] == 0.20
+
+
+def test_schedule_lets_everything_through_on_a_scheduled_bar():
+    from quantbot.risk import apply_rebalance_schedule
+    prev = pd.Series({"A": 0.1})
+    target = pd.Series({"A": 0.5})
+    out = apply_rebalance_schedule(target, prev, bar_index=24, every=24,
+                                   trading_allowed=True)
+    assert out["A"] == 0.5
+
+
+def test_schedule_never_delays_a_guard_flattening():
+    """A cost control that postpones the drawdown guard would be a risk bug."""
+    from quantbot.risk import apply_rebalance_schedule
+    prev = pd.Series({"A": 0.5, "B": 0.3})
+    flat = pd.Series({"A": 0.0, "B": 0.0})
+    out = apply_rebalance_schedule(flat, prev, bar_index=5, every=24,
+                                   trading_allowed=False)
+    assert (out == 0.0).all(), "halted book must flatten on the bar it is decided"
+
+
+def test_every_equal_one_is_a_no_op():
+    from quantbot.risk import apply_rebalance_schedule
+    prev = pd.Series({"A": 0.1})
+    target = pd.Series({"A": 0.9})
+    assert apply_rebalance_schedule(target, prev, 7, 1, True)["A"] == 0.9

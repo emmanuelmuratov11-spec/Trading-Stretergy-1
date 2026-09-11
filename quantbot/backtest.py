@@ -30,8 +30,9 @@ from quantbot.model import WalkForwardModel
 from quantbot.strategies import probabilities as engine_probabilities
 from quantbot.trades import TradeStats, extract as extract_trades, summarise as summarise_trades
 from quantbot.risk import (
-    DrawdownGuard, apply_portfolio_limits, covariance_path, edge_to_weight,
-    portfolio_vol_scalar, smooth_scalar, volatility_scalar,
+    DrawdownGuard, apply_portfolio_limits, apply_rebalance_schedule,
+    covariance_path, edge_to_weight, portfolio_vol_scalar, smooth_scalar,
+    volatility_scalar,
 )
 from quantbot.validation import walk_forward_splits
 
@@ -192,19 +193,8 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
             halted_bars += 1
         target = targets.loc[ts] if allowed else pd.Series(0.0, index=symbols)
 
-        # Rebalance on a schedule rather than every bar. The model only refits
-        # weekly, so re-trading hourly pays a spread to chase a signal that has
-        # barely moved. Risk-reducing moves -- trimming a position, a forced
-        # exit, or the drawdown guard flattening the book -- are never delayed.
-        #
-        # The exemption is evaluated PER SYMBOL. Asking whether *any* symbol is
-        # reducing lets one noisy name drag the whole book into a rebalance,
-        # which fires on nearly every bar once there are a few symbols and
-        # defeats the schedule entirely (measured: 112.5x -> 89.9x turnover,
-        # where the schedule alone should have cut several times more).
-        if (t % cfg.costs.rebalance_every) != 0 and allowed:
-            reducing = target.abs() < prev_w.abs() - 1e-12
-            target = target.where(reducing, prev_w)
+        target = apply_rebalance_schedule(
+            target, prev_w, t, cfg.costs.rebalance_every, allowed)
 
         delta = target - prev_w
         # No-trade band. Rebalancing costs real money every time, so a move is

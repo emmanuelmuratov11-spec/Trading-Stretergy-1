@@ -149,6 +149,31 @@ class DrawdownGuard:
         return "HALTED" if self.halted else "ACTIVE"
 
 
+def apply_rebalance_schedule(target: pd.Series, prev_w: pd.Series,
+                             bar_index: int, every: int,
+                             trading_allowed: bool) -> pd.Series:
+    """Hold positions between scheduled rebalances, per symbol.
+
+    Trading costs are paid every time a weight moves, and the model only
+    refits weekly, so re-trading each bar pays a spread to chase a signal that
+    has barely moved. Between scheduled bars each position is held.
+
+    Two exemptions, because a cost control must never become a risk control
+    failure: a move that REDUCES a position happens immediately, and when
+    trading is disallowed (the drawdown guard has fired) the flattening is not
+    delayed either.
+
+    The reduction test is per symbol. Asking whether *any* symbol is reducing
+    lets one noisy name drag the whole book into a rebalance, which fires on
+    nearly every bar once a few symbols are held and cancels the schedule
+    outright.
+    """
+    if every <= 1 or not trading_allowed or (bar_index % every) == 0:
+        return target
+    reducing = target.abs() < prev_w.abs() - 1e-12
+    return target.where(reducing, prev_w)
+
+
 def stop_loss_price(entry: float, sigma: float, cfg: RiskConfig, long: bool = True) -> float:
     """Hard stop, placed at a volatility-scaled distance from entry."""
     move = cfg.stop_loss_sigma * max(sigma, 1e-4)
