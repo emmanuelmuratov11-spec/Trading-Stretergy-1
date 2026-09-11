@@ -1,6 +1,7 @@
 {
   "predictions": [
     {
+      "context": {},
       "correct": null,
       "engine": "ml",
       "entry_price": 77106.18,
@@ -18,6 +19,7 @@
       "ts": "2026-09-11T19:17:55.868694+00:00"
     },
     {
+      "context": {},
       "correct": null,
       "engine": "ml",
       "entry_price": 2539.69,
@@ -35,6 +37,7 @@
       "ts": "2026-09-11T19:17:55.868694+00:00"
     },
     {
+      "context": {},
       "correct": null,
       "engine": "ml",
       "entry_price": 101.11,
@@ -50,6 +53,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.06014465252422125,
       "ts": "2026-09-11T19:17:55.868694+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.053975321541992693,
+        "trend_z": -0.5537987894928673,
+        "vol": 0.4601337822826265
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 77355.0,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "BTCUSD-1789157999",
+      "pnl_weight": null,
+      "prob": 0.5028412030737118,
+      "realised_return": null,
+      "resolve_at": "2026-09-12T20:19:59.491086+00:00",
+      "resolved": false,
+      "sigma": 0.004916228572669771,
+      "symbol": "BTC/USD",
+      "target_weight": 0.0,
+      "ts": "2026-09-11T20:19:59.491086+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.033978367030258805,
+        "trend_z": 0.3749219780240258,
+        "vol": 0.8849153362456507
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 2539.98,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "ETHUSD-1789157999",
+      "pnl_weight": null,
+      "prob": 0.6518109972587324,
+      "realised_return": null,
+      "resolve_at": "2026-09-12T20:19:59.491086+00:00",
+      "resolved": false,
+      "sigma": 0.009454741703299638,
+      "symbol": "ETH/USD",
+      "target_weight": 0.08646334794356117,
+      "ts": "2026-09-11T20:19:59.491086+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.041822255414488474,
+        "trend_z": 0.09195787995309196,
+        "vol": 0.7887090791942492
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 102.64,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "SOLUSD-1789157999",
+      "pnl_weight": null,
+      "prob": 0.5951038327051175,
+      "realised_return": null,
+      "resolve_at": "2026-09-12T20:19:59.491086+00:00",
+      "resolved": false,
+      "sigma": 0.008426840757971524,
+      "symbol": "SOL/USD",
+      "target_weight": 0.060773145571428204,
+      "ts": "2026-09-11T20:19:59.491086+00:00"
     }
   ]
 }
