@@ -21,10 +21,9 @@ publish it. What follows is the honest version of what this repository is.
   deflated Sharpe ratio that penalises you for the number of variants you have
   tried. Those tools do not make a backtest proof — they only make it less of
   a lie.
-* **You should expect this to lose money at first**, and quite possibly
-  always. The default configuration has never been validated on real market
-  data (see "Current status"), because the environment it was built in had no
-  market-data access.
+* **The default configuration loses money on real data.** That is measured,
+  not feared: −23.3% against −8.2% for buy-and-hold over 18 months of BTC/ETH/SOL.
+  See "Current status" for the full table and the diagnosis.
 * **Only risk money you can lose entirely.** Not rent, not savings, not
   borrowed money. Leverage is capped at 1.0 by default; raising it is how
   accounts go to zero.
@@ -220,13 +219,46 @@ means the edge is smaller than you think.
 * 66 tests pass, including a leak test that is itself verified: introducing a
   deliberate lookahead bug makes it fail and names the offending feature.
 * The full pipeline is exercised end to end offline via `selftest`.
-* **The strategy has never been run on real market data.** The sandbox this was
-  built in blocked every exchange host at the network-policy level, so the only
-  backtests so far are on synthetic data — which proves the plumbing works and
-  proves nothing at all about profitability. Running
-  `python -m quantbot backtest --trials 1` on your own machine or in Actions is
-  the first real test, and its result should be treated as the first genuine
-  evidence either way.
+
+### It has now been run on real data, and it lost money
+
+First real backtest: **BTC/ETH/SOL, hourly, 13,021 bars (~18 months) of
+Coinbase data**, walk-forward, out-of-sample, after costs.
+
+| | Strategy | Buy & hold |
+|---|---|---|
+| Total return | **−23.3%** | −8.2% |
+| CAGR | −16.3% | −5.6% |
+| Sharpe | **−1.98** | 0.07 |
+| Max drawdown | −25.1% | −53.9% |
+| Hit rate | 48.2% | — |
+| Annual turnover | **112.5x** | 0x |
+| Deflated Sharpe | **0.007** | 0.535 |
+
+**The strategy as configured does not work.** It lost roughly three times what
+simply holding the basket lost. The drawdown guard fired and stood the book
+down for 2,427 bars, which is the one part that behaved exactly as designed.
+
+The diagnosis is mostly in one number: **112.5x annual turnover**. At the
+configured ~11.5bps per unit of turnover that is ~12.9% a year in costs, or
+about **19 of the 23 percentage points lost**. The remaining ~4 points are
+consistent with a 48.2% hit rate — a model with no edge, or a slightly
+negative one. So this is not primarily a bad predictor; it is a mediocre
+predictor being taxed to death by trading too often.
+
+The reporting did its job: DSR of 0.007 correctly refuses to call this
+anything but noise, and the run warned on both counts without being asked.
+
+**Do not read this table as "needs tuning until it goes green."** Every
+re-test on the same data is another draw from the multiple-testing urn, which
+is exactly what DSR exists to punish — raise `--trials` honestly each time you
+retest. Reducing turnover is a legitimate fix, because it plugs a known cost
+leak rather than fitting returns. Raising leverage or loosening the deadband
+until the curve points up is not.
+
+Reproduce or re-run it yourself from the Actions tab
+(`.github/workflows/backtest.yml`), or locally with
+`python -m quantbot backtest --trials 1 --plot`.
 
 ## Layout
 
