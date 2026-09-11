@@ -105,6 +105,24 @@ jobs:
             --json-out reports/diversified_metrics.json \
             -v 2>&1 | tee diversified_log.txt
 
+      - name: Grade historical out-of-sample calls (crypto trend)
+        if: always()
+        run: |
+          python - <<'PY'
+          import yaml
+          c = yaml.safe_load(open("config.yaml"))
+          c["model"]["kind"] = "trend"
+          yaml.safe_dump(c, open("/tmp/crypto_trend.yaml", "w"), sort_keys=False)
+          PY
+          python -m quantbot backfill -c /tmp/crypto_trend.yaml --trials 8 \
+            2>&1 | tee backfill_crypto.txt
+
+      - name: Grade historical out-of-sample calls (diversified)
+        if: always()
+        run: |
+          python -m quantbot backfill -c config.diversified.yaml --trials 8 \
+            2>&1 | tee backfill_div.txt
+
       - name: Pre-registered strategy comparison (dev vs holdout)
         if: always()
         run: |
@@ -115,6 +133,14 @@ jobs:
         if: always()
         run: |
           {
+            echo "## Graded out-of-sample calls - crypto trend"
+            echo '```'
+            sed -n '/HISTORICAL OUT-OF-SAMPLE/,$p' backfill_crypto.txt 2>/dev/null | head -55
+            echo '```'
+            echo "## Graded out-of-sample calls - diversified"
+            echo '```'
+            sed -n '/HISTORICAL OUT-OF-SAMPLE/,$p' backfill_div.txt 2>/dev/null | head -55
+            echo '```'
             echo "## Diversification"
             echo '```'
             cat diversification_log.txt 2>/dev/null | head -30
@@ -139,5 +165,7 @@ jobs:
             compare_log.txt
             diversified_log.txt
             diversification_log.txt
+            backfill_crypto.txt
+            backfill_div.txt
           if-no-files-found: warn
           retention-days: 30

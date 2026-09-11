@@ -5,6 +5,7 @@
     python -m quantbot signal      # alert only: tells you what to trade
     python -m quantbot paper       # alert + update the paper portfolio
     python -m quantbot report      # show current paper portfolio
+    python -m quantbot backfill    # grade thousands of historical OOS calls now
 """
 
 from __future__ import annotations
@@ -180,6 +181,44 @@ def cmd_paper(cfg: Config, args) -> int:
     return _run_live(cfg, args, mode="paper")
 
 
+def cmd_backfill(cfg: Config, args) -> int:
+    """Grade the model's historical out-of-sample calls immediately."""
+    from quantbot import backfill, backtest
+    from quantbot.journal import format_attribution, format_scorecard
+
+    frames = _load(cfg, use_cache=not args.no_cache)
+    res = backtest.run(cfg, frames, n_trials=args.trials)
+    journal = backfill.run(cfg, frames, res)
+
+    n = len(journal.resolved())
+    if n == 0:
+        log.error("no historical predictions could be graded; need more history")
+        return 1
+
+    print()
+    print("=" * 72)
+    print(f"HISTORICAL OUT-OF-SAMPLE CALLS, GRADED  ({cfg.model.kind} on "
+          f"{cfg.data.timeframe}, {', '.join(cfg.data.symbols)})")
+    print("=" * 72)
+    print("Every call below was made by a model that had not seen that bar, and")
+    print("is sampled one horizon apart so the observations are independent.")
+    print("This is NOT a live record: fills are assumed, so it answers whether")
+    print("the model was right, not whether you would have captured it.")
+    print()
+    print(format_scorecard(journal))
+    print()
+    print(format_attribution(journal))
+    print()
+    from quantbot.trades import format_stats
+    print(format_stats(res.trades, "ROUND-TRIP TRADES OVER THE SAME PERIOD"))
+
+    if not args.dry_run:
+        path = os.path.join(cfg.state_dir, "backfill_journal.json")
+        journal.save(path)
+        log.info("wrote %s", path)
+    return 0
+
+
 def cmd_report(cfg: Config, args) -> int:
     state_path = os.path.join(cfg.state_dir, "portfolio.json")
     if not os.path.exists(state_path):
@@ -250,7 +289,8 @@ def cmd_selftest(cfg: Config, args) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="quantbot", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["backtest", "signal", "paper", "report", "selftest"])
+    ap.add_argument("command", choices=["backtest", "signal", "paper", "report",
+                                        "selftest", "backfill"])
     ap.add_argument("-c", "--config", default="config.yaml")
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("--no-cache", action="store_true", help="ignore the local bar cache")
@@ -277,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {
         "backtest": cmd_backtest, "signal": cmd_signal, "paper": cmd_paper,
         "report": cmd_report, "selftest": cmd_selftest,
+        "backfill": cmd_backfill,
     }
     try:
         return handlers[args.command](cfg, args)
