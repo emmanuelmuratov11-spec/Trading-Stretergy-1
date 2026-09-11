@@ -22,12 +22,22 @@ class DataError(RuntimeError):
     """Raised when market data is missing, malformed, or untrustworthy."""
 
 
-def bars_per_year(timeframe: str) -> float:
+def bars_per_year(timeframe: str, annual_days: float = 365.0) -> float:
+    """Bars in a year, given how many days a year the market actually trades.
+
+    Crypto runs continuously, so its year is 365 days. Equities trade about 252
+    sessions. Annualising a daily stock Sharpe by sqrt(365) rather than
+    sqrt(252) overstates it by roughly 20%, which is exactly the sort of
+    flattering error that makes a strategy look better than it is.
+    """
     minutes = TIMEFRAME_MINUTES.get(timeframe)
     if minutes is None:
         raise DataError(f"unsupported timeframe {timeframe!r}")
-    # Crypto trades continuously, so the year is a real calendar year.
-    return (365.0 * 24.0 * 60.0) / minutes
+    if annual_days <= 0:
+        raise DataError("annual_days must be positive")
+    if timeframe == "1d":
+        return float(annual_days)
+    return (annual_days * 24.0 * 60.0) / minutes
 
 
 def validate_ohlcv(df: pd.DataFrame, symbol: str = "?") -> pd.DataFrame:

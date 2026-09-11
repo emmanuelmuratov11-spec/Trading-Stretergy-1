@@ -18,6 +18,9 @@ class DataConfig:
     lookback_days: int = 720
     cache_dir: str = "data_cache"
     benchmark: str = "BTC/USDT"
+    # 365 for crypto (always open), ~252 for equities (trading sessions).
+    annual_days: float = 365.0
+    asset_class: str = "crypto"   # crypto | equity, for alert wording
 
 
 @dataclass

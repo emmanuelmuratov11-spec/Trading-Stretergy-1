@@ -1,0 +1,89 @@
+name: Stock signals
+
+# Equities are daily bars, so this runs once after the US close rather than
+# hourly. 22:30 UTC is comfortably after 16:00 ET in both DST and standard
+# time, giving the free data feeds time to publish the session.
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "paper (updates the book) or signal (alert only)"
+        default: paper
+        type: choice
+        options: [paper, signal]
+      force_send:
+        description: "Send an alert even if nothing changed"
+        default: false
+        type: boolean
+
+concurrency:
+  group: stock-signals
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Generate stock signals
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python -m quantbot ${{ inputs.mode || 'paper' }} \
+            -c config.stocks.yaml \
+            --plot reports/stocks.png \
+            ${{ inputs.force_send && '--force-send' || '' }} -v
+
+      - name: Commit stock book and journal
+        run: |
+          git config user.name  "quantbot"
+          git config user.email "actions@github.com"
+          git add -f state/stocks/portfolio.json state/stocks/journal.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "no state change to commit"
+          else
+            git commit -m "chore: stock paper state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for i in 1 2 3 4; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+                git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              echo "push attempt $i failed; retrying"
+              sleep $((2 ** i))
+            done
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stock-charts
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            curl -s -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              -d "text=quantbot STOCK run FAILED - no signal today. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              > /dev/null
+          fi

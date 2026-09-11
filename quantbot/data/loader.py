@@ -9,6 +9,7 @@ import pandas as pd
 from quantbot.config import DataConfig
 from quantbot.data.base import DataError
 from quantbot.data.cache import read as cache_read, write as cache_write
+from quantbot.data.equities import StooqSource, YahooSource
 from quantbot.data.exchanges import BinanceSource, CoinbaseSource
 from quantbot.data.synthetic import SyntheticSource
 
@@ -17,7 +18,17 @@ log = logging.getLogger(__name__)
 _SOURCES = {
     "binance": BinanceSource,
     "coinbase": CoinbaseSource,
+    "stooq": StooqSource,
+    "yahoo": YahooSource,
     "synthetic": SyntheticSource,
+}
+
+# Sources that cover the same instruments, so one can stand in for the other.
+_FALLBACKS = {
+    "binance": "coinbase",
+    "coinbase": "binance",
+    "stooq": "yahoo",
+    "yahoo": "stooq",
 }
 
 
@@ -45,8 +56,8 @@ def load_universe(
     worse than failing loudly.
     """
     order = [cfg.source]
-    if fallback and cfg.source in ("binance", "coinbase"):
-        order.append("coinbase" if cfg.source == "binance" else "binance")
+    if fallback and cfg.source in _FALLBACKS:
+        order.append(_FALLBACKS[cfg.source])
 
     out: dict[str, pd.DataFrame] = {}
     failures: dict[str, str] = {}

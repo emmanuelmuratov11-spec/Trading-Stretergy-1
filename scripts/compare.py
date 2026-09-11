@@ -134,7 +134,7 @@ def main() -> int:
             log.error("%s: backtest failed: %s", label, exc)
             continue
 
-        bpy = bars_per_year(cfg.data.timeframe)
+        bpy = bars_per_year(cfg.data.timeframe, cfg.data.annual_days)
         idx = res.returns.index
         cut = int(idx.searchsorted(cutoff))
         if cut < 30 or len(idx) - cut < 30:

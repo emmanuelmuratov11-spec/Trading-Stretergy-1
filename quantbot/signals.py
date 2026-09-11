@@ -40,6 +40,7 @@ class SignalSet:
     sigmas: dict[str, float]
     stops: dict[str, float]
     vols: dict[str, float]
+    take_profits: dict[str, float] = field(default_factory=dict)
     # Market conditions per symbol at call time, carried into the journal so a
     # later post-mortem can ask which regimes the model is actually good in.
     context: dict[str, dict] = field(default_factory=dict)
@@ -50,7 +51,7 @@ class SignalSet:
 def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
     """Fit on all available history and predict the most recent bar."""
     cfg.validate()
-    bpy = bars_per_year(cfg.data.timeframe)
+    bpy = bars_per_year(cfg.data.timeframe, cfg.data.annual_days)
     symbols = list(frames)
     market = frames.get(cfg.data.benchmark)
     warnings: list[str] = []
@@ -67,21 +68,11 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
         df = frames[sym]
         prices[sym] = float(df["close"].iloc[-1])
 
-        if cfg.model.kind == "trend":
-            # No fitting required: the rule is fixed, so the live path is the
-            # backtest path with no room to diverge.
-            tp = trend_probabilities(df, cfg, bpy).iloc[-1]
-            probs[sym] = float(tp) if np.isfinite(tp) else 0.5
-            continue
-
-        mkt = None if sym == cfg.data.benchmark else market
-        X = build_features(df, cfg.features, bpy, market=mkt)
+        # Volatility, stop distance and regime are needed by EVERY engine --
+        # they size the position and price the stop. Computing them before the
+        # engine branch keeps a stop from going missing just because the
+        # strategy needs no fitting.
         labels = triple_barrier(df["close"], df["high"], df["low"], cfg.labels)
-        y = binary_target(labels)
-
-        valid = X.notna().mean(axis=1) > 0.75
-        Xv, yv = X[valid], y[valid]
-
         sig = float(labels["sigma"].iloc[-1]) if np.isfinite(labels["sigma"].iloc[-1]) else 0.01
         sigmas[sym] = sig
         v = realised_vol(df["close"], cfg.labels.vol_window, bpy).iloc[-1]
@@ -99,6 +90,20 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
             "trend_z": (mom / mvol) if np.isfinite(mvol) and mvol > 1e-12 else 0.0,
             "drawdown": float(close.iloc[-1] / roll_max - 1.0) if roll_max > 0 else 0.0,
         }
+
+        if cfg.model.kind == "trend":
+            # No fitting required: the rule is fixed, so the live path is the
+            # backtest path with no room to diverge.
+            tp = trend_probabilities(df, cfg, bpy).iloc[-1]
+            probs[sym] = float(tp) if np.isfinite(tp) else 0.5
+            continue
+
+        mkt = None if sym == cfg.data.benchmark else market
+        X = build_features(df, cfg.features, bpy, market=mkt)
+        y = binary_target(labels)
+
+        valid = X.notna().mean(axis=1) > 0.75
+        Xv, yv = X[valid], y[valid]
 
         # The final `horizon_bars` rows have labels that cannot have resolved
         # yet, so they must not be trained on.
@@ -135,6 +140,14 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
     targets = apply_portfolio_limits(scaled, cfg.risk).iloc[0].to_dict()
 
     stops = {s: stop_loss_price(prices[s], sigmas[s], cfg.risk, long=True) for s in symbols}
+    # The profit target is the triple barrier the model was actually trained
+    # against, not a number invented for the alert -- so the reward side of the
+    # ratio means the same thing the label meant.
+    h = np.sqrt(cfg.labels.horizon_bars)
+    take_profits = {
+        s: float(prices[s] * np.exp(cfg.labels.upper_sigma * max(sigmas[s], 1e-4) * h))
+        for s in symbols
+    }
 
     staleness = (datetime.now(timezone.utc) - asof.to_pydatetime()).total_seconds() / 60.0
     if staleness > 180:
@@ -144,7 +157,8 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
         )
 
     return SignalSet(asof=asof, prices=prices, probabilities=probs, targets=targets,
-                     sigmas=sigmas, stops=stops, vols=vols, context=context,
+                     sigmas=sigmas, stops=stops, take_profits=take_profits,
+                     vols=vols, context=context,
                      staleness_minutes=staleness, warnings=warnings)
 
 
@@ -167,13 +181,53 @@ def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
         lines.append("")
 
     if orders:
-        lines.append("ACTION REQUIRED" if mode == "alert" else "ORDERS EXECUTED (paper)")
+        lines.append("ACTION REQUIRED - place these yourself" if mode == "alert"
+                     else "ORDERS EXECUTED (paper money)")
+        unit = "shares" if cfg.data.asset_class == "equity" else "units"
         for o in orders:
-            lines.append(f"  {o.side:4s} {o.qty:.6g} {o.symbol}  @ ~{o.price:,.2f}")
-            lines.append(f"       ${o.notional:,.2f}   ({o.reason})")
+            base = o.symbol.split("/")[0]
+            stop = sig.stops.get(o.symbol, 0.0)
+            tp = sig.take_profits.get(o.symbol, 0.0)
+            p = sig.probabilities.get(o.symbol, 0.5)
+            lines.append("")
+            lines.append(f"  ---- {o.side} {base} ----")
+            lines.append(f"    {unit.capitalize():12s} {o.qty:,.6g}")
             if o.side == "BUY":
-                lines.append(f"       suggested stop: {sig.stops[o.symbol]:,.2f}")
+                # A marketable limit: crosses the spread enough to fill, while
+                # refusing a price far worse than the one the signal assumed.
+                limit = o.price * 1.0015
+                lines.append(f"    {'Entry':12s} ~{o.price:,.2f}   "
+                             f"(limit {limit:,.2f} or better)")
+                risk = (o.price - stop) * o.qty
+                reward = (tp - o.price) * o.qty
+                rr = reward / risk if risk > 0 else 0.0
+                lines.append(f"    {'Stop loss':12s} {stop:,.2f}   "
+                             f"({stop / o.price - 1:+.1%}, risk ${risk:,.0f})")
+                lines.append(f"    {'Target':12s} {tp:,.2f}   "
+                             f"({tp / o.price - 1:+.1%}, reward ${reward:,.0f})")
+                lines.append(f"    {'Reward:risk':12s} {rr:.2f} : 1")
+            else:
+                limit = o.price * 0.9985
+                lines.append(f"    {'Exit':12s} ~{o.price:,.2f}   "
+                             f"(limit {limit:,.2f} or better)")
+            pct = o.notional / equity if equity > 0 else 0.0
+            lines.append(f"    {'Size':12s} ${o.notional:,.2f}  = {pct:.1%} of book")
+            strength = ("strong" if abs(p - 0.5) > 0.10
+                        else "moderate" if abs(p - 0.5) > 0.03 else "weak")
+            lines.append(f"    {'Confidence':12s} p(up) {p:.3f}  ({strength})")
+            ctx = sig.context.get(o.symbol, {})
+            if ctx:
+                tz = ctx.get("trend_z", 0.0)
+                regime = "uptrend" if tz > 0.5 else "downtrend" if tz < -0.5 else "flat"
+                lines.append(f"    {'Conditions':12s} {regime}, "
+                             f"vol {ctx.get('vol', 0):.0%}, "
+                             f"{ctx.get('drawdown', 0):+.1%} off highs")
+            lines.append(f"    {'Reason':12s} {o.reason}")
         lines.append("")
+        if cfg.data.asset_class == "equity":
+            lines.append("  NOTE: stocks gap overnight and at weekends. A stop is")
+            lines.append("  an instruction, not a guarantee - a gap can open past it.")
+            lines.append("")
     else:
         lines.append("No action -- current positions already match the target.")
         lines.append("")
@@ -204,6 +258,16 @@ def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
         from quantbot.journal import format_scorecard
         lines.append("")
         lines.append(format_scorecard(journal))
+        recent = [p for p in journal.resolved()][-6:]
+        if recent:
+            lines.append("")
+            lines.append("LAST FEW CALLS, GRADED")
+            for p in recent:
+                mark = "HIT " if p.correct else "MISS"
+                lines.append(f"  {mark} {p.symbol:9s} p={p.prob:.2f} "
+                             f"{p.entry_price:,.2f} -> {p.exit_price:,.2f}  "
+                             f"{p.realised_return:+.2%}")
+
         findings = journal.diagnosis()
         if findings:
             lines.append("")

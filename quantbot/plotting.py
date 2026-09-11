@@ -107,7 +107,7 @@ def render_backtest(result, cfg, path: str, title: str = "Backtest") -> str:
     from quantbot.data.base import bars_per_year
 
     plt.rcParams["font.family"] = FONT
-    bpy = bars_per_year(cfg.data.timeframe)
+    bpy = bars_per_year(cfg.data.timeframe, cfg.data.annual_days)
 
     m, b = result.metrics, result.benchmark_metrics
     equity, bench = result.equity, result.benchmark_equity

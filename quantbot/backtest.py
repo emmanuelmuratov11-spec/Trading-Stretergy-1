@@ -94,7 +94,7 @@ def run(cfg: Config, frames: dict[str, pd.DataFrame],
         n_trials: int = 1) -> BacktestResult:
     """Run the full walk-forward backtest over an aligned universe."""
     cfg.validate()
-    bpy = bars_per_year(cfg.data.timeframe)
+    bpy = bars_per_year(cfg.data.timeframe, cfg.data.annual_days)
     symbols = list(frames)
     market = frames.get(cfg.data.benchmark)
 
