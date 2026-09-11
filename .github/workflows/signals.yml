@@ -63,11 +63,11 @@ jobs:
         run: |
           git config user.name  "quantbot"
           git config user.email "actions@github.com"
-          git add -f state/portfolio.json 2>/dev/null || true
+          git add -f state/portfolio.json state/journal.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "no state change to commit"
           else
-            git commit -m "chore: paper portfolio state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git commit -m "chore: paper state + prediction journal $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             # Another scheduled run may have pushed while we were working.
             for i in 1 2 3 4; do
               git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \

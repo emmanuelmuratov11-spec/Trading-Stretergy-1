@@ -62,6 +62,7 @@ of 2021. It does not mean the system becomes reliably profitable over time.
 | `metrics.py` | Sharpe, Sortino, Calmar — plus PSR and DSR, which haircut your Sharpe for luck and for multiple testing. |
 | `signals.py` | Live signals, sharing one implementation with the backtest so the two cannot drift apart. |
 | `plotting.py` | Four-panel visual report, delivered to your phone as an image. |
+| `journal.py` | Records every call before the outcome is known, grades it later, and cuts size when live evidence says there is no edge. |
 | `scripts/overfit_demo.py` | Proves how easily a search manufactures a great backtest from pure noise. |
 
 ### Design decisions worth knowing about
@@ -188,6 +189,46 @@ this branch is merged, trigger it manually from the Actions tab
 silence should never be ambiguous.
 
 ---
+
+## The live track record
+
+Every run writes each prediction to `state/journal.json` **before** the outcome
+is known — symbol, probability, intended position, entry price, and the bar by
+which it should resolve. Later runs find the matured ones, fetch the realised
+price, and grade them. Because the call was committed to disk first, there is
+no hindsight in the resulting record.
+
+Each alert then carries a live scorecard:
+
+```
+LIVE TRACK RECORD (graded, no hindsight)
+  Calls graded    2
+  Hit rate        50.0%  (95% CI 9.5%-90.5%)
+  Sum P&L/weight  -0.0459
+  Brier           0.364  (0.25 = no better than a coin flip)
+  Not yet distinguishable from a coin flip.
+  By confidence band:
+    |p-0.5| 0.05-0.10  n=   1  hit 100%  pnl +0.0061
+    |p-0.5| 0.20-1.00  n=   1  hit 0%  pnl -0.0519
+  Size multiplier 1.00x - only 2/60 graded calls - not adapting yet
+```
+
+Two rules keep this from becoming another way to fool yourself.
+
+**Small samples decide nothing.** Every rate carries a Wilson interval. Three
+wins out of five is not a 60% hit rate — its interval runs 23% to 88%. No
+adaptation happens at all until 60 calls have been graded.
+
+**Adaptation only ever reduces risk.** If live results are bad the system
+halves size or stands down entirely. If they are good it does **not** size up.
+That asymmetry is deliberate: a winning streak over 30 trades is
+indistinguishable from luck, while a losing streak is at least consistent with
+having no edge. Sizing up on noise is how accounts die, so the code cannot do
+it — and a test enforces that the multiplier never exceeds 1.0.
+
+The Brier score is the honest summary of whether confidence means anything:
+0.25 is what you score by always saying "50/50", and above that the model's
+confidence is actively misleading.
 
 ## Before you trust any backtest, including this one
 

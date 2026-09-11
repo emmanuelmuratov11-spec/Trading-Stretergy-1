@@ -132,7 +132,8 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
 
 
 def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
-                 cfg: Config, mode: str = "paper", halted: bool = False) -> Alert:
+                 cfg: Config, mode: str = "paper", halted: bool = False,
+                 journal=None) -> Alert:
     """Render a signal set and its orders as a phone-readable message."""
     equity = portfolio.equity(sig.prices)
     dd = portfolio.drawdown(sig.prices)
@@ -181,6 +182,11 @@ def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
             px = sig.prices.get(s, p.avg_price)
             lines.append(f"    {s:10s} {p.qty:.6g} @ {p.avg_price:,.2f} "
                          f"-> {px:,.2f} ({p.unrealised(px):+,.2f})")
+
+    if journal is not None:
+        from quantbot.journal import format_scorecard
+        lines.append("")
+        lines.append(format_scorecard(journal))
 
     if sig.warnings:
         lines.append("")

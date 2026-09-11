@@ -19,6 +19,7 @@ from quantbot.config import Config
 from quantbot.data import load_universe
 from quantbot.data.loader import align
 from quantbot.notify import build_notifiers, send_all, send_photo_all
+from quantbot.journal import Journal
 from quantbot.portfolio import Portfolio
 from quantbot.risk import DrawdownGuard
 
@@ -82,10 +83,27 @@ def cmd_backtest(cfg: Config, args) -> int:
 
 
 def _run_live(cfg: Config, args, mode: str) -> int:
+    from datetime import datetime, timezone
+
     from quantbot import signals
+    from quantbot.data.base import TIMEFRAME_MINUTES
 
     frames = _load(cfg, use_cache=not args.no_cache)
     sig = signals.generate(cfg, frames)
+
+    # --- Grade the calls whose horizon has now elapsed. This happens BEFORE
+    # --- today's sizing, so the system is judged on committed predictions.
+    journal_path = os.path.join(cfg.state_dir, "journal.json")
+    journal = Journal.load(journal_path)
+    graded = journal.resolve(frames)
+    if graded:
+        log.info("graded %d matured prediction(s)", graded)
+
+    live_mult, live_reason = journal.risk_multiplier()
+    if live_mult < 1.0:
+        log.warning("live evidence is cutting size to %.2fx: %s", live_mult, live_reason)
+        sig.targets = {s: w * live_mult for s, w in sig.targets.items()}
+        sig.warnings.append(f"size cut to {live_mult:.2f}x - {live_reason}")
 
     state_path = os.path.join(cfg.state_dir, "portfolio.json")
     pf = Portfolio.load(state_path, cfg.initial_capital)
@@ -109,7 +127,20 @@ def _run_live(cfg: Config, args, mode: str) -> int:
         pf.apply(orders, fee_rate=fee)
         pf.mark(sig.prices)
 
-    alert = signals.format_alert(sig, orders, pf, cfg, mode=mode, halted=not allowed)
+    # --- Commit today's calls to the journal BEFORE the outcome is known.
+    # --- Writing them down first is what makes the track record honest.
+    now = datetime.now(timezone.utc)
+    bar_minutes = TIMEFRAME_MINUTES[cfg.data.timeframe]
+    for sym, prob in sig.probabilities.items():
+        journal.record(
+            ts=now, symbol=sym, engine=cfg.model.kind, prob=prob,
+            target_weight=sig.targets.get(sym, 0.0), price=sig.prices[sym],
+            horizon_bars=cfg.labels.horizon_bars, bar_minutes=bar_minutes,
+            sigma=sig.sigmas.get(sym, 0.0),
+        )
+
+    alert = signals.format_alert(sig, orders, pf, cfg, mode=mode,
+                                 halted=not allowed, journal=journal)
 
     if orders or not allowed or cfg.alerts.send_heartbeat or args.force_send:
         notifiers = build_notifiers(cfg.alerts.channels)
@@ -130,6 +161,10 @@ def _run_live(cfg: Config, args, mode: str) -> int:
     else:
         log.info("nothing material changed; no alert sent")
 
+    if not args.dry_run:
+        journal.save(journal_path)
+        log.info("journal: %d predictions, %d graded",
+                 len(journal.predictions), len(journal.resolved()))
     if mode == "paper" and not args.dry_run:
         pf.save(state_path)
         log.info("saved portfolio state to %s", state_path)
@@ -162,6 +197,12 @@ def cmd_report(cfg: Config, args) -> int:
     for s, p in sorted(pf.positions.items()):
         if abs(p.qty) > 1e-10:
             print(f"  {s:12s} {p.qty:.6g} @ {p.avg_price:,.2f}")
+
+    journal = Journal.load(os.path.join(cfg.state_dir, "journal.json"))
+    if journal.predictions:
+        from quantbot.journal import format_scorecard
+        print()
+        print(format_scorecard(journal))
 
     if args.plot:
         from quantbot import plotting
