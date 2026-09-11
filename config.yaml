@@ -1,0 +1,57 @@
+# quantbot configuration.
+#
+# Defaults are deliberately conservative. Every knob that makes the backtest
+# look better (lower costs, higher leverage, bigger Kelly fraction) makes the
+# live result worse if you are wrong. Change them slowly and re-validate.
+
+data:
+  # Coinbase is the default because GitHub Actions runners are US-based and
+  # api.binance.com returns HTTP 451 to US IPs. Use "binance" only if you run
+  # this somewhere Binance serves; "synthetic" runs fully offline.
+  source: coinbase
+  symbols: ["BTC/USD", "ETH/USD", "SOL/USD"]
+  timeframe: "1h"
+  lookback_days: 720
+  cache_dir: data_cache
+  benchmark: "BTC/USD"
+
+labels:
+  horizon_bars: 24        # judge each decision over the next 24 hours
+  upper_sigma: 1.5
+  lower_sigma: 1.5
+  vol_window: 72
+
+model:
+  train_bars: 4320        # ~6 months of hourly history per fit
+  retrain_every: 168      # refit weekly -- this is the "self-learning" loop
+  min_train_bars: 1500
+  n_seeds: 3
+  embargo_bars: 24        # must be >= labels.horizon_bars, or labels leak
+  calibrate: true
+
+risk:
+  target_annual_vol: 0.28
+  max_gross_leverage: 1.0   # 1.0 == never borrow. Raise this at your peril.
+  max_position_weight: 0.5
+  kelly_fraction: 0.30      # a third of Kelly; full Kelly is a route to ruin
+  conviction_deadband: 0.04
+  allow_shorts: false
+  max_drawdown_stop: 0.25   # flatten everything past a 25% drawdown
+  drawdown_recovery: 0.10
+  scalar_smoothing: 48
+
+costs:
+  taker_fee_bps: 6.0        # 0.06%. Check your own exchange's actual fee.
+  half_spread_bps: 2.0
+  slippage_coef: 0.35
+  min_trade_weight: 0.02
+  rebalance_band: 0.25
+
+alerts:
+  channels: ["console", "telegram"]
+  min_weight_change: 0.05   # only alert when the book should move 5%+
+  send_heartbeat: false     # true = message every run, even with no trades
+
+initial_capital: 10000.0
+state_dir: state
+seed: 7

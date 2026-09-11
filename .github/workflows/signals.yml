@@ -1,0 +1,91 @@
+name: Trading signals
+
+# Scheduled workflows only run from the repository's DEFAULT branch. Until this
+# is merged there, use the "Run workflow" button (workflow_dispatch) to test it.
+on:
+  schedule:
+    # Hourly, a few minutes past the hour so the bar has closed and settled.
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "paper (updates the portfolio) or signal (alert only)"
+        default: paper
+        type: choice
+        options: [paper, signal]
+      force_send:
+        description: "Send an alert even if nothing changed"
+        default: false
+        type: boolean
+
+# Never let two runs update the portfolio state at the same time.
+concurrency:
+  group: trading-signals
+  cancel-in-progress: false
+
+permissions:
+  contents: write      # needed to commit the updated portfolio state back
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache market data between runs
+        uses: actions/cache@v4
+        with:
+          path: data_cache
+          key: bars-${{ github.run_id }}
+          restore-keys: bars-
+
+      - name: Generate signals
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python -m quantbot ${{ inputs.mode || 'paper' }} \
+            ${{ inputs.force_send && '--force-send' || '' }} -v
+
+      - name: Commit portfolio state
+        run: |
+          git config user.name  "quantbot"
+          git config user.email "actions@github.com"
+          git add -f state/portfolio.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "no state change to commit"
+          else
+            git commit -m "chore: paper portfolio state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # Another scheduled run may have pushed while we were working.
+            for i in 1 2 3 4; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+                git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              echo "push attempt $i failed; retrying"
+              sleep $((2 ** i))
+            done
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            curl -s -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              -d "text=quantbot run FAILED. No signal was generated this hour. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              > /dev/null
+          fi
