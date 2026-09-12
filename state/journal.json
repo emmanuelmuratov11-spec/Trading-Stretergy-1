@@ -1439,6 +1439,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.03753077757300975,
       "ts": "2026-09-12T16:19:58.206173+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.05408453232834942,
+        "trend_z": -0.7165695401571077,
+        "vol": 0.34717028617562495
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 77346.07,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "BTCUSD-1789233453",
+      "pnl_weight": null,
+      "prob": 0.5631294177956143,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T17:17:33.209036+00:00",
+      "resolved": false,
+      "sigma": 0.003709287485938612,
+      "symbol": "BTC/USD",
+      "target_weight": 0.09164732074130925,
+      "ts": "2026-09-12T17:17:33.209036+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.03723396163266546,
+        "trend_z": 0.2363342657477715,
+        "vol": 0.6754974094745677
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 2531.42,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "ETHUSD-1789233453",
+      "pnl_weight": null,
+      "prob": 0.5682191214653302,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T17:17:33.209036+00:00",
+      "resolved": false,
+      "sigma": 0.007217248098474752,
+      "symbol": "ETH/USD",
+      "target_weight": 0.05089943608410077,
+      "ts": "2026-09-12T17:17:33.209036+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.04723674383868559,
+        "trend_z": -0.26146283208197485,
+        "vol": 0.6001041131687341
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 102.06,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "SOLUSD-1789233453",
+      "pnl_weight": null,
+      "prob": 0.4970206470305521,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T17:17:33.209036+00:00",
+      "resolved": false,
+      "sigma": 0.006411720028686488,
+      "symbol": "SOL/USD",
+      "target_weight": 0.0,
+      "ts": "2026-09-12T17:17:33.209036+00:00"
     }
   ]
 }
