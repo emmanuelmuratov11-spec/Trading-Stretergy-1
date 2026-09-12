@@ -1175,6 +1175,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.059373874341313984,
       "ts": "2026-09-12T12:23:02.713935+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.05479189536114648,
+        "trend_z": -0.6039205881715459,
+        "vol": 0.3660225944729128
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 77288.23,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "BTCUSD-1789219079",
+      "pnl_weight": null,
+      "prob": 0.5178824754258748,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T13:17:59.517673+00:00",
+      "resolved": false,
+      "sigma": 0.003910712072179876,
+      "symbol": "BTC/USD",
+      "target_weight": 0.0,
+      "ts": "2026-09-12T13:17:59.517673+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.03388328541219787,
+        "trend_z": 0.3971132637994695,
+        "vol": 0.710609958676828
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 2540.23,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "ETHUSD-1789219079",
+      "pnl_weight": null,
+      "prob": 0.6085672913221758,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T13:17:59.517673+00:00",
+      "resolved": false,
+      "sigma": 0.007592402725876997,
+      "symbol": "ETH/USD",
+      "target_weight": 0.0770013340768016,
+      "ts": "2026-09-12T13:17:59.517673+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.04901045556385364,
+        "trend_z": -0.09245753933588764,
+        "vol": 0.6347694332454601
+      },
+      "correct": null,
+      "engine": "ml",
+      "entry_price": 101.87,
+      "exit_price": null,
+      "horizon_bars": 24,
+      "id": "SOLUSD-1789219079",
+      "pnl_weight": null,
+      "prob": 0.6156523450308112,
+      "realised_return": null,
+      "resolve_at": "2026-09-13T13:17:59.517673+00:00",
+      "resolved": false,
+      "sigma": 0.006782096305334798,
+      "symbol": "SOL/USD",
+      "target_weight": 0.09182669933791389,
+      "ts": "2026-09-12T13:17:59.517673+00:00"
     }
   ]
 }
