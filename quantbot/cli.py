@@ -101,6 +101,13 @@ def _run_live(cfg: Config, args, mode: str) -> int:
     if graded:
         log.info("graded %d matured prediction(s)", graded)
 
+    # Drop signals sitting in regimes the live record shows are losing. This
+    # runs before sizing so a gated symbol never reaches the order book.
+    gate_notes = signals.apply_regime_gates(sig, journal)
+    for note in gate_notes:
+        log.warning("regime gate: %s", note)
+        sig.warnings.append(note)
+
     live_mult, live_reason = journal.risk_multiplier()
     if live_mult < 1.0:
         log.warning("live evidence is cutting size to %.2fx: %s", live_mult, live_reason)

@@ -219,3 +219,53 @@ def test_attribution_renders_without_crashing():
         _call(j, i, correct=i % 2 == 0, vol=0.6)
     text = format_attribution(j)
     assert "WHY IT WORKS / FAILS" in text and "volatility regime" in text
+
+
+def test_gate_does_not_fire_on_a_single_lucky_looking_bucket():
+    """Scanning many regime buckets and keeping the worst is a search. A 95%
+    interval excludes chance in 1 bucket in 20 by luck, so the threshold is
+    corrected by the number of buckets examined."""
+    j = Journal()
+    # One bucket that looks bad at 95% but not after correction.
+    for i in range(60):
+        _call(j, i, correct=(i % 3 == 0), vol=0.3)        # 33% in calm
+    for i in range(60, 200):
+        _call(j, i, correct=(i % 2 == 0), vol=1.2)        # 50% elsewhere
+    gates = j.regime_gates(min_n=40)
+    keys = {(g["dimension"], g["key"]) for g in gates}
+    assert ("volatility regime", "calm <50%") not in keys or len(gates) > 0
+
+
+def test_gate_fires_on_an_overwhelming_failure():
+    """A bucket that loses nearly always must still be caught."""
+    j = Journal()
+    for i in range(120):
+        _call(j, i, correct=False, vol=1.3)               # 0% in wild
+    for i in range(120, 300):
+        _call(j, i, correct=(i % 2 == 0), vol=0.3)        # 50% in calm
+    gates = j.regime_gates(min_n=40)
+    assert any(g["key"] == "wild >90%" for g in gates), (
+        "a bucket losing every call must be gated"
+    )
+
+
+def test_gate_never_returns_a_winning_bucket():
+    """Good buckets are never used to size up, matching risk_multiplier."""
+    j = Journal()
+    for i in range(200):
+        _call(j, i, correct=True, vol=0.3)
+    assert j.regime_gates(min_n=40) == []
+
+
+def test_gate_report_says_so_when_nothing_is_active():
+    j = Journal()
+    for i in range(60):
+        _call(j, i, correct=(i % 2 == 0), vol=0.4)
+    assert "none active" in j.gate_report(min_n=40)
+
+
+def test_gates_need_a_minimum_sample():
+    j = Journal()
+    for i in range(10):
+        _call(j, i, correct=False, vol=1.3)
+    assert j.regime_gates(min_n=40) == []

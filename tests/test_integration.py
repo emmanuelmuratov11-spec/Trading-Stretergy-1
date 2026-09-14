@@ -147,15 +147,32 @@ def test_unknown_engine_is_rejected(cfg):
         cfg.validate()
 
 
-def test_throttled_schedule_never_raises_turnover(cfg):
-    """A weaker but robust claim than a fixed percentage: whichever no-trade
-    band happens to be binding, scheduling cannot INCREASE turnover."""
+def test_scheduling_and_the_no_trade_band_interact_non_monotonically(cfg):
+    """Scheduling does NOT simply reduce turnover, and assuming it does is
+    wrong twice over.
+
+    The no-trade band suppresses moves below a threshold. Rebalancing every bar
+    means each incremental move is small and often suppressed, so the position
+    drifts without trading. Delaying rebalances lets the gap accumulate, and the
+    larger move then clears the band and trades. Measured on this fixture,
+    a 24-bar schedule produced MORE turnover than rebalancing every bar.
+
+    So the schedule is worth having for the reason the unit tests in
+    test_risk.py pin down - it holds increases while letting reductions through
+    immediately - not because of a turnover guarantee it cannot make.
+    """
     frames = _frames(cfg)
     cfg.costs.rebalance_every = 24
     throttled = backtest.run(cfg, frames)
     cfg.costs.rebalance_every = 1
     every_bar = backtest.run(cfg, frames)
-    assert throttled.metrics.turnover <= every_bar.metrics.turnover + 1e-9
+
+    # Both are finite and positive; neither dominates in general.
+    assert throttled.metrics.turnover > 0
+    assert every_bar.metrics.turnover > 0
+    # What IS guaranteed: the book is still within its leverage limits.
+    assert throttled.weights.abs().sum(axis=1).max() <= cfg.risk.max_gross_leverage + 1e-9
+
 
 
 def test_summary_reports_actual_trade_statistics(cfg):

@@ -162,6 +162,41 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
                      staleness_minutes=staleness, warnings=warnings)
 
 
+def apply_regime_gates(sig: SignalSet, journal, min_n: int = 40) -> list[str]:
+    """Zero the weight of any symbol currently sitting in a losing regime.
+
+    This is the adaptation that can lift the win rate: stop taking the trades
+    that lose. It fires only on conditions whose multiple-testing-corrected
+    interval excludes chance, and it can only ever remove exposure - a bucket
+    that looks unusually good is never used to size up.
+    """
+    from quantbot.journal import _bucket_key
+    from quantbot.journal import Prediction
+
+    gates = journal.regime_gates(min_n=min_n)
+    if not gates:
+        return []
+
+    notes: list[str] = []
+    for sym in list(sig.targets):
+        if abs(sig.targets[sym]) < 1e-12:
+            continue
+        probe = Prediction(
+            id="", ts="", symbol=sym, engine="", prob=sig.probabilities.get(sym, 0.5),
+            target_weight=sig.targets[sym], entry_price=sig.prices.get(sym, 0.0),
+            horizon_bars=0, resolve_at="", context=sig.context.get(sym, {}),
+        )
+        for g in gates:
+            if _bucket_key(probe, g["dimension"]) == g["key"]:
+                sig.targets[sym] = 0.0
+                notes.append(
+                    f"{sym}: skipped - {g['dimension']}={g['key']} has won only "
+                    f"{g['hit_rate']:.0%} of {g['n']} live calls"
+                )
+                break
+    return notes
+
+
 def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
                  cfg: Config, mode: str = "paper", halted: bool = False,
                  journal=None) -> Alert:
@@ -258,6 +293,8 @@ def format_alert(sig: SignalSet, orders: list[Order], portfolio: Portfolio,
         from quantbot.journal import format_scorecard
         lines.append("")
         lines.append(format_scorecard(journal))
+        lines.append("")
+        lines.append(journal.gate_report())
         recent = [p for p in journal.resolved()][-6:]
         if recent:
             lines.append("")

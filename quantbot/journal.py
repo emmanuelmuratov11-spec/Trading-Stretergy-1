@@ -59,6 +59,38 @@ class Prediction:
     pnl_weight: float | None = None   # return x weight, i.e. contribution
 
 
+def norm_quantile(p: float) -> float:
+    """Inverse normal CDF, for turning a corrected confidence level into z."""
+    from quantbot.metrics import norm_inv
+    return norm_inv(p)
+
+
+def _bucket_key(p: "Prediction", dimension: str):
+    """Which bucket a prediction falls in, for a named attribution dimension."""
+    if dimension == "symbol":
+        return p.symbol
+    if dimension == "engine":
+        return p.engine
+    if dimension == "direction":
+        return "long" if p.target_weight > 1e-9 else "flat"
+    if dimension == "volatility regime":
+        v = p.context.get("vol")
+        if v is None:
+            return None
+        return "calm <50%" if v < 0.5 else "normal 50-90%" if v < 0.9 else "wild >90%"
+    if dimension == "trend regime":
+        t = p.context.get("trend_z")
+        if t is None:
+            return None
+        return "downtrend" if t < -0.5 else "flat" if t < 0.5 else "uptrend"
+    if dimension == "drawdown regime":
+        d = p.context.get("drawdown")
+        if d is None:
+            return None
+        return "near highs" if d > -0.05 else "off highs" if d > -0.20 else "deep drawdown"
+    return None
+
+
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """Confidence interval for a hit rate.
 
@@ -274,6 +306,64 @@ class Journal:
                 f"each bucket needs {min_n}+ before it is worth believing)"
             )
         return findings
+
+    def regime_gates(self, min_n: int = 40, alpha: float = 0.05) -> list[dict]:
+        """Conditions where live evidence says the model is worse than chance.
+
+        This is the adaptation that can actually lift the win rate: stop taking
+        the trades that lose. It is also the easiest place in the whole system
+        to fool yourself, because the condition is chosen AFTER looking at the
+        results.
+
+        Scanning ~10 regime buckets and keeping whichever looks worst is a
+        search, and a 95% interval is expected to exclude chance in 1 bucket in
+        20 by luck alone. So the threshold is Bonferroni-corrected by the number
+        of buckets actually examined: with 10 buckets each must clear 99.5%
+        confidence, not 95%. That is deliberately hard to trigger. A gate that
+        fires on the first suggestive pattern is a gate that fits noise.
+
+        Only conditions that are worse than a coin flip are returned. A bucket
+        that looks unusually GOOD is never used to size up, for the same reason
+        the risk multiplier never exceeds 1.0.
+        """
+        rs = self.resolved()
+        if not rs:
+            return []
+
+        attr = self.attribution(min_n=min_n)
+        buckets = [(dim, r) for dim, rows in attr.items() for r in rows]
+        n_tested = max(len(buckets), 1)
+        # Bonferroni: split the error budget across every bucket examined.
+        z = norm_quantile(1.0 - (alpha / n_tested) / 2.0)
+
+        gates = []
+        for dim, r in buckets:
+            if r["n"] < min_n:
+                continue
+            group = [p for p in rs if _bucket_key(p, dim) == r["key"]]
+            wins = sum(1 for p in group if p.correct)
+            lo, hi = wilson_interval(wins, len(group), z=z)
+            if hi < 0.5:
+                gates.append({
+                    "dimension": dim, "key": r["key"], "n": len(group),
+                    "hit_rate": wins / len(group), "ci_low": lo, "ci_high": hi,
+                    "pnl": r["pnl"], "z": z, "buckets_tested": n_tested,
+                })
+        return gates
+
+    def gate_report(self, min_n: int = 40, alpha: float = 0.05) -> str:
+        gates = self.regime_gates(min_n=min_n, alpha=alpha)
+        attr = self.attribution(min_n=min_n)
+        tested = sum(len(rows) for rows in attr.values())
+        if not gates:
+            return ("REGIME GATES\n  none active - no condition is worse than "
+                    f"chance once corrected for the {tested} buckets examined")
+        lines = ["REGIME GATES (live evidence says skip these)"]
+        for g in gates:
+            lines.append(f"  SKIP {g['dimension']}={g['key']}  "
+                         f"hit {g['hit_rate']:.0%} over {g['n']} calls, "
+                         f"corrected CI {g['ci_low']:.0%}-{g['ci_high']:.0%}")
+        return "\n".join(lines)
 
     # ---------- adaptation ----------
 
