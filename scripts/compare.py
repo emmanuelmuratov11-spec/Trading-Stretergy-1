@@ -50,6 +50,10 @@ CANDIDATES = [
     ("trend  6h", "trend", "6h"),
     ("trend  1d", "trend", "1d"),
     ("blend  1d", "blend", "1d"),
+    # Added after the live record showed the ML engine losing on momentum-like
+    # calls at this horizon. Derived from results, so it raises --trials.
+    ("revert 1h", "revert", "1h"),
+    ("revert 6h", "revert", "6h"),
 ]
 
 
@@ -87,7 +91,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("-c", "--config", default="config.yaml")
     ap.add_argument("--holdout-frac", type=float, default=0.30)
-    ap.add_argument("--trials", type=int, default=7,
+    ap.add_argument("--trials", type=int, default=10,
                     help="total configurations tested against this data, ever")
     args = ap.parse_args()
 

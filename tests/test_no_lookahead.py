@@ -87,3 +87,19 @@ def test_trend_signal_is_causal(btc):
     assert np.isclose(full, trunc, rtol=1e-9, atol=1e-12), (
         f"trend signal leaked: {trunc} became {full} once future bars arrived"
     )
+
+
+def test_revert_signal_is_causal(btc):
+    import numpy as np
+
+    from quantbot.config import Config
+    from quantbot.data.base import bars_per_year
+    from quantbot.strategies import revert_probabilities
+
+    cfg = Config()
+    cfg.model.kind = "revert"
+    bpy = bars_per_year("1h")
+    cut = 2000
+    full = revert_probabilities(btc, cfg, bpy).iloc[cut - 1]
+    trunc = revert_probabilities(btc.iloc[:cut], cfg, bpy).iloc[-1]
+    assert np.isclose(full, trunc, rtol=1e-9, atol=1e-12), "revert signal leaked"

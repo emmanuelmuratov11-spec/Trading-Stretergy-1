@@ -126,7 +126,7 @@ jobs:
       - name: Pre-registered strategy comparison (dev vs holdout)
         if: always()
         run: |
-          python scripts/compare.py --holdout-frac 0.30 --trials 7 \
+          python scripts/compare.py --holdout-frac 0.30 --trials 10 \
             2>&1 | tee compare_log.txt
 
       - name: Comparison to the run page

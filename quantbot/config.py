@@ -54,6 +54,9 @@ class ModelConfig:
     kind: str = "ml"
     trend_lookbacks: list[int] = field(default_factory=lambda: [24, 72, 168, 336])
     trend_scale: float = 1.5
+    # Short-horizon reversal: much shorter windows than trend, by design.
+    revert_lookbacks: list[int] = field(default_factory=lambda: [4, 12, 24, 48])
+    revert_scale: float = 1.0
     train_bars: int = 4320           # ~6 months of hourly bars
     retrain_every: int = 168         # retrain weekly on hourly data
     min_train_bars: int = 1500
@@ -135,11 +138,14 @@ class Config:
             raise ValueError("horizon_bars must be >= 1")
         if self.costs.rebalance_every < 1:
             raise ValueError("rebalance_every must be >= 1")
-        if self.model.kind not in ("ml", "trend", "blend"):
+        if self.model.kind not in ("ml", "trend", "revert", "blend"):
             raise ValueError(
-                f"model.kind must be ml, trend or blend (got {self.model.kind!r})")
+                f"model.kind must be ml, trend, revert or blend "
+                f"(got {self.model.kind!r})")
         if self.model.kind in ("trend", "blend") and not self.model.trend_lookbacks:
             raise ValueError("trend_lookbacks must not be empty")
+        if self.model.kind == "revert" and not self.model.revert_lookbacks:
+            raise ValueError("revert_lookbacks must not be empty")
 
     @classmethod
     def from_yaml(cls, path: str | None) -> "Config":

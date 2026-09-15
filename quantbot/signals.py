@@ -22,7 +22,7 @@ from quantbot.labels import binary_target, triple_barrier
 from quantbot.model import WalkForwardModel
 from quantbot.notify.base import Alert
 from quantbot.portfolio import Order, Portfolio
-from quantbot.strategies import trend_probabilities
+from quantbot.strategies import revert_probabilities, trend_probabilities
 from quantbot.risk import (
     apply_portfolio_limits, covariance_path, edge_to_weight,
     portfolio_vol_scalar, stop_loss_price, volatility_scalar,
@@ -91,10 +91,11 @@ def generate(cfg: Config, frames: dict[str, pd.DataFrame]) -> SignalSet:
             "drawdown": float(close.iloc[-1] / roll_max - 1.0) if roll_max > 0 else 0.0,
         }
 
-        if cfg.model.kind == "trend":
+        if cfg.model.kind in ("trend", "revert"):
             # No fitting required: the rule is fixed, so the live path is the
             # backtest path with no room to diverge.
-            tp = trend_probabilities(df, cfg, bpy).iloc[-1]
+            fn = trend_probabilities if cfg.model.kind == "trend" else revert_probabilities
+            tp = fn(df, cfg, bpy).iloc[-1]
             probs[sym] = float(tp) if np.isfinite(tp) else 0.5
             continue
 

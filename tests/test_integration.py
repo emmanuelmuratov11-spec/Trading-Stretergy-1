@@ -192,3 +192,53 @@ def test_trade_stats_are_populated_on_the_result(cfg):
     if res.trades.n_trades > 0:
         assert 0.0 <= res.trades.win_rate <= 1.0
         assert res.trades.ci_low <= res.trades.win_rate <= res.trades.ci_high
+
+
+def test_revert_buys_weakness_and_fades_strength(cfg):
+    """The engine derived from the live failures must actually take the
+    opposite side of momentum: bullish when price is stretched below its mean."""
+    import numpy as np
+    import pandas as pd
+
+    from quantbot.data.base import bars_per_year, validate_ohlcv
+    from quantbot.strategies import revert_probabilities
+
+    cfg.model.kind = "revert"
+    idx = pd.date_range("2026-01-01", periods=200, freq="h", tz="UTC")
+
+    def frame(prices):
+        d = pd.DataFrame({"open": prices, "high": [p * 1.001 for p in prices],
+                          "low": [p * 0.999 for p in prices], "close": prices,
+                          "volume": [1.0] * len(prices)}, index=idx)
+        return validate_ohlcv(d, "X")
+
+    bpy = bars_per_year("1h")
+    # A sharp selloff after a flat stretch: stretched BELOW the mean.
+    down = frame([100.0] * 150 + list(np.linspace(100, 85, 50)))
+    # A sharp rally: stretched ABOVE the mean.
+    up = frame([100.0] * 150 + list(np.linspace(100, 115, 50)))
+
+    p_down = float(revert_probabilities(down, cfg, bpy).iloc[-1])
+    p_up = float(revert_probabilities(up, cfg, bpy).iloc[-1])
+    assert p_down > 0.5, "a selloff should read bullish to a reversal engine"
+    assert p_up < 0.5, "a rally should read bearish to a reversal engine"
+    assert p_down > p_up
+
+
+def test_revert_engine_runs_end_to_end(cfg):
+    cfg.model.kind = "revert"
+    res = backtest.run(cfg, _frames(cfg))
+    assert len(res.equity) > 0
+    assert res.weights.abs().sum(axis=1).max() <= cfg.risk.max_gross_leverage + 1e-9
+
+
+def test_revert_and_trend_disagree(cfg):
+    """If they agreed, one of them is wired wrong."""
+    frames = _frames(cfg)
+    cfg.model.kind = "trend"
+    t = backtest.run(cfg, frames).probabilities
+    cfg.model.kind = "revert"
+    r = backtest.run(cfg, frames).probabilities
+    common = t.index.intersection(r.index)
+    corr = t.loc[common].stack().corr(r.loc[common].stack())
+    assert corr < 0.0, f"revert should oppose trend, got correlation {corr:.3f}"
