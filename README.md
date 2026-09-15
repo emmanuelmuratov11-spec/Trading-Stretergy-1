@@ -330,6 +330,41 @@ are in this window. Note also that SPY's own deflated Sharpe of 0.996 is far
 more statistically solid than the strategy's 0.638 — the index's track record
 is better evidenced, not just better.
 
+### A hypothesis from the live record, tested and rejected
+
+The live journal found a real, statistically strong pattern: over 213 graded
+calls the ML engine won 64% buying off the highs and in downtrends, and only
+31% near the highs and 38% in quiet markets. Inverted, the losing buckets read
+69% and 62%. The obvious inference was that this market mean-reverts at a
+24-hour horizon and the model was behaving like a momentum signal — so a
+reversal engine was built to take the other side, and validated out of sample.
+
+It failed, decisively:
+
+| | DEV return | DEV Sharpe | Turnover | HOLDOUT return | HOLDOUT Sharpe |
+|---|---|---|---|---|---|
+| revert 1h | **−24.6%** | −2.37 | **198x** | +0.0% | 0.00 |
+| revert 6h | +0.7% | 0.11 | 70x | **−20.6%** | −2.11 |
+| trend 6h | +9.6% | 0.54 | 64x | **+4.3%** | 0.45 |
+
+The reason is in the turnover column. At 198x a year and ~11.5bps per unit of
+turnover, `revert 1h` pays roughly **22.8% a year in costs** — the signal would
+have to be extraordinary to clear that, and it is not. Reversion at an hourly
+horizon means retrading constantly, and the frequency is fatal regardless of
+whether the direction is right. (`revert 1h` shows exactly 0.0 across the
+holdout because the drawdown guard tripped during the −24.6% development period
+and never recovered enough to re-enter — the kill switch working as designed.)
+
+**The lesson is not "the pattern was fake".** The attribution buckets were
+strong and survived correction. The lesson is that a directional edge only
+becomes a strategy if it survives the cost of harvesting it at the frequency it
+appears — and an hourly signal is the most expensive kind to act on. A pattern
+in the data is not yet an edge in the account.
+
+Prediction made before that run, for calibration: "beats the ML engine at 1h,
+positive dev returns, decays on holdout." Wrong on the first two — it was far
+worse than the ML engine in development (−24.6% against +6.9%).
+
 ### The crypto runs, for completeness
 
 First real backtest: **BTC/ETH/SOL, hourly, 13,021 bars (~18 months) of
