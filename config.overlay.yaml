@@ -1,0 +1,72 @@
+# Trend overlay on an index core.
+#
+# Everything measured in this repository points here:
+#   * The index beat every strategy tried (SPY +113.7% against +23.5%).
+#   * Trend worked at 6h and 1d and lost at 1h.
+#   * Cost is what killed the short-horizon ideas (198x turnover = 22.8%/yr).
+#   * Diversification improved risk, not return.
+#
+# So this does not try to beat the index. It HOLDS the index, and uses a slow
+# trend signal only to step aside during sustained downtrends. Turnover is a
+# handful of trades a year, so costs are close to irrelevant, and the documented
+# prior is strong: time-series momentum applied to an equity index is one of the
+# most replicated results in the literature.
+#
+# The honest expectation is NOT higher returns. It is a similar return with a
+# materially smaller worst-case drawdown - which is only visible if the test
+# includes a crash. That is why lookback_days spans three decades.
+
+data:
+  source: stooq
+  symbols: ["SPY", "QQQ", "TLT", "GLD"]
+  timeframe: "1d"
+  lookback_days: 11000      # ~30 years: dot-com, 2008, 2020, 2022
+  cache_dir: data_cache
+  benchmark: "SPY"
+  annual_days: 252
+  asset_class: equity
+
+labels:
+  horizon_bars: 21          # a month of sessions
+  upper_sigma: 1.5
+  lower_sigma: 1.5
+  vol_window: 60
+
+model:
+  kind: trend
+  # Long, slow windows. The classic 200-day filter sits inside this range.
+  trend_lookbacks: [60, 120, 200, 250]
+  trend_scale: 1.0
+  train_bars: 750
+  min_train_bars: 250
+  retrain_every: 60
+  embargo_bars: 21
+
+risk:
+  target_annual_vol: 0.14
+  max_gross_leverage: 1.0   # never borrow
+  max_position_weight: 0.60
+  kelly_fraction: 0.60      # higher: the signal is slow and the prior is strong
+  conviction_deadband: 0.02
+  allow_shorts: false       # step aside, never short
+  max_drawdown_stop: 0.30
+  drawdown_recovery: 0.12
+  cov_span: 250
+  scalar_smoothing: 20
+
+costs:
+  taker_fee_bps: 1.0
+  half_spread_bps: 2.0
+  slippage_coef: 0.25
+  min_trade_weight: 0.05    # wide bands: this should trade rarely
+  rebalance_band: 0.35
+  rebalance_every: 5        # weekly at most
+
+alerts:
+  channels: ["console", "telegram"]
+  min_weight_change: 0.08
+  send_heartbeat: false
+
+initial_capital: 10000.0
+state_dir: state/overlay
+seed: 7

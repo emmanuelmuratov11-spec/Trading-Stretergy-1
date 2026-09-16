@@ -123,6 +123,12 @@ jobs:
           python -m quantbot backfill -c config.diversified.yaml --trials 8 \
             2>&1 | tee backfill_div.txt
 
+      - name: Crisis test - trend overlay across three decades
+        if: always()
+        run: |
+          python scripts/crisis.py -c config.overlay.yaml --trials 11 \
+            2>&1 | tee crisis_log.txt
+
       - name: Pre-registered strategy comparison (dev vs holdout)
         if: always()
         run: |
@@ -133,6 +139,10 @@ jobs:
         if: always()
         run: |
           {
+            echo "## Crisis test - trend overlay, three decades"
+            echo '```'
+            sed -n '/CRISIS PERIODS/,$p' crisis_log.txt 2>/dev/null | head -45
+            echo '```'
             echo "## Graded out-of-sample calls - crypto trend"
             echo '```'
             sed -n '/HISTORICAL OUT-OF-SAMPLE/,$p' backfill_crypto.txt 2>/dev/null | head -55
@@ -167,5 +177,6 @@ jobs:
             diversification_log.txt
             backfill_crypto.txt
             backfill_div.txt
+            crisis_log.txt
           if-no-files-found: warn
           retention-days: 30
