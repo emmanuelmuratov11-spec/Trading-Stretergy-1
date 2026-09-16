@@ -15,7 +15,7 @@
 # another attempt to forecast direction.
 
 data:
-  source: stooq
+  source: yahoo             # full history, no API key; stooq serves only ~4y
   symbols:
     - "SPY"    # US large cap equities
     - "IWM"    # US small cap - different cycle to large cap
