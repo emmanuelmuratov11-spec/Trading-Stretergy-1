@@ -17,7 +17,12 @@
 # includes a crash. That is why lookback_days spans three decades.
 
 data:
-  source: stooq
+  # yahoo, NOT stooq. Stooq serves ~4 years, which silently made the crisis
+  # test meaningless - every crash fell outside the window. Yahoo's chart
+  # endpoint serves full history with range=max and needs no API key. The
+  # fallback order matters here: stooq "succeeds" with a short window, so it
+  # never fails over, and the longer source is never reached.
+  source: yahoo
   symbols: ["SPY", "QQQ", "TLT", "GLD"]
   timeframe: "1d"
   lookback_days: 11000      # ~30 years: dot-com, 2008, 2020, 2022
