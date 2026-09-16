@@ -65,7 +65,9 @@ def load_universe(
     for symbol in cfg.symbols:
         df = None
         if use_cache:
-            df = cache_read(cfg.cache_dir, cfg.source, symbol, cfg.timeframe, max_age_minutes)
+            df = cache_read(cfg.cache_dir, cfg.source, symbol, cfg.timeframe,
+                            max_age_minutes,
+                            min_span_days=cfg.lookback_days * 0.5)
             if df is not None:
                 log.info("%s: %d bars from cache", symbol, len(df))
 

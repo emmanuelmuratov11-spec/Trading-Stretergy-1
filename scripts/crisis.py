@@ -61,7 +61,15 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = Config.from_yaml(args.config)
-    frames = align(load_universe(cfg.data, use_cache=True, max_age_minutes=1440))
+    try:
+        frames = align(load_universe(cfg.data, use_cache=True, max_age_minutes=1440))
+    except Exception as exc:
+        # A data problem is a failed test, not a failed script. Crashing here
+        # loses the rest of the run and tells you nothing about the strategy.
+        print(f"CRISIS TEST COULD NOT RUN: {exc}")
+        print("  The strategy was not evaluated. This is a data problem, not a")
+        print("  result - do not read it as either success or failure.")
+        return 0
     span = min(d.index[0] for d in frames.values()), max(d.index[-1] for d in frames.values())
     print(f"History available: {span[0]:%Y-%m-%d} to {span[1]:%Y-%m-%d}")
     print(f"Symbols: {', '.join(frames)}\n")

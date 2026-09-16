@@ -84,15 +84,13 @@ def test_diversified_config_is_valid_and_spans_asset_classes():
 
 
 def test_long_lookbacks_request_full_history():
-    """Capping the request at 5 years silently truncates any test that needs a
-    crisis in the window - which is exactly what invalidated the first crisis
-    run, over a window containing no crisis."""
+    """Capping the yahoo request at 5 years silently truncates any test that
+    needs a crisis in the window, which is what invalidated the first crisis
+    run. Stooq is deliberately NOT given a date range - see the test below."""
     import inspect
 
     src = inspect.getsource(YahooSource.fetch)
     assert '"max"' in src, "a multi-decade lookback must ask for full history"
-    stooq = inspect.getsource(StooqSource.fetch)
-    assert '"d1"' in stooq, "stooq needs an explicit start date or it returns its default window"
 
 
 def test_truncated_history_is_flagged():
@@ -113,3 +111,28 @@ def test_truncated_history_is_flagged():
     assert warn_if_truncated(short, requested_days=1000) == [], (
         "history that covers the request must not be flagged"
     )
+
+
+def test_stooq_does_not_send_a_date_range():
+    """Adding d1/d2 looked like the fix and was strictly worse: 73 bars per
+    symbol against ~1457 for the plain request, leaving the universe with no
+    overlapping timestamps."""
+    import inspect
+    assert '"d1"' not in inspect.getsource(StooqSource.fetch)
+
+
+def test_a_short_cache_entry_is_not_reused(tmp_path):
+    """One bad fetch poisoned the cache for every later run."""
+    import pandas as pd
+
+    from quantbot.data.cache import read as cache_read, write as cache_write
+
+    idx = pd.date_range("2026-06-01", periods=73, freq="D", tz="UTC")
+    short = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                          "volume": 1.0}, index=idx)
+    cache_write(str(tmp_path), "stooq", "SPY", "1d", short)
+
+    assert cache_read(str(tmp_path), "stooq", "SPY", "1d", 10_000,
+                      min_span_days=1000) is None, "a 73-day cache entry must be a miss"
+    assert cache_read(str(tmp_path), "stooq", "SPY", "1d", 10_000,
+                      min_span_days=10) is not None

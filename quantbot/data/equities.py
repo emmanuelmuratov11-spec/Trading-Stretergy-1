@@ -54,15 +54,13 @@ class StooqSource:
                 "Set data.timeframe: 1d for equities."
             )
         ticker = _normalise(symbol)
-        start = (pd.Timestamp.now(tz="UTC")
-                 - pd.Timedelta(days=lookback_days)).strftime("%Y%m%d")
-        end = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d")
         try:
-            # d1/d2 ask for an explicit range; without them stooq returns only
-            # its own default window, which silently truncated a 30-year test
-            # to 4 years.
-            resp = requests.get(self.BASE,
-                                params={"s": ticker, "i": "d", "d1": start, "d2": end},
+            # Deliberately NO d1/d2 date range. Adding them looked like the fix
+            # for stooq's truncated history and was strictly worse: the plain
+            # request returns ~1457 days for SPY, while the ranged request
+            # returned 73 bars per symbol and left the universe with no
+            # overlapping timestamps at all. Stooq serves what it serves.
+            resp = requests.get(self.BASE, params={"s": ticker, "i": "d"},
                                 timeout=_TIMEOUT)
         except Exception as exc:
             raise DataError(f"{symbol}: stooq request failed: {exc}") from exc
