@@ -81,3 +81,35 @@ def test_diversified_config_is_valid_and_spans_asset_classes():
     assert {"SPY", "TLT", "GLD"} <= syms, "needs equities, bonds and gold at minimum"
     assert len(syms) >= 10
     assert cfg.risk.max_position_weight <= 0.25, "no single market may dominate"
+
+
+def test_long_lookbacks_request_full_history():
+    """Capping the request at 5 years silently truncates any test that needs a
+    crisis in the window - which is exactly what invalidated the first crisis
+    run, over a window containing no crisis."""
+    import inspect
+
+    src = inspect.getsource(YahooSource.fetch)
+    assert '"max"' in src, "a multi-decade lookback must ask for full history"
+    stooq = inspect.getsource(StooqSource.fetch)
+    assert '"d1"' in stooq, "stooq needs an explicit start date or it returns its default window"
+
+
+def test_truncated_history_is_flagged():
+    """The truncation must be loud. A quiet short window produced a crisis test
+    that proved nothing while looking like it had run correctly - stooq served
+    four years against a thirty-year request."""
+    import pandas as pd
+
+    from quantbot.data.loader import warn_if_truncated
+
+    idx = pd.date_range("2022-09-19", "2026-09-15", freq="D", tz="UTC")
+    short = {"SPY": pd.DataFrame({"close": range(len(idx))}, index=idx)}
+
+    flagged = warn_if_truncated(short, requested_days=11000)
+    assert flagged, "a 4-year answer to a 30-year request must be flagged"
+    assert "SPY" in flagged[0] and "11000" in flagged[0]
+
+    assert warn_if_truncated(short, requested_days=1000) == [], (
+        "history that covers the request must not be flagged"
+    )

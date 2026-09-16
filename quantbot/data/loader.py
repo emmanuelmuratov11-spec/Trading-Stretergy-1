@@ -96,7 +96,33 @@ def load_universe(
         )
     if failures:
         log.warning("dropped %d symbol(s): %s", len(failures), sorted(failures))
+
+    warn_if_truncated(out, cfg.lookback_days)
     return out
+
+
+def warn_if_truncated(frames: dict[str, pd.DataFrame], requested_days: int,
+                      tolerance: float = 0.6) -> list[str]:
+    """Flag any symbol whose returned history is far shorter than requested.
+
+    A source that quietly serves a shorter window than asked for invalidates
+    every conclusion that depends on the period, and the truncation is
+    invisible unless it is checked. This is not hypothetical: stooq returned
+    four years against a thirty-year request, so a crisis test ran over a
+    window containing no crisis and would have looked perfectly healthy.
+    """
+    messages: list[str] = []
+    for sym, df in frames.items():
+        if len(df) < 2:
+            continue
+        span_days = (df.index[-1] - df.index[0]).days
+        if span_days < requested_days * tolerance:
+            msg = (f"{sym}: asked for {requested_days} days of history but got "
+                   f"{span_days} ({df.index[0].date()} to {df.index[-1].date()}). "
+                   "Any conclusion that depends on the period is unreliable.")
+            log.warning("%s", msg)
+            messages.append(msg)
+    return messages
 
 
 def align(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:

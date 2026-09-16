@@ -54,8 +54,15 @@ class StooqSource:
                 "Set data.timeframe: 1d for equities."
             )
         ticker = _normalise(symbol)
+        start = (pd.Timestamp.now(tz="UTC")
+                 - pd.Timedelta(days=lookback_days)).strftime("%Y%m%d")
+        end = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d")
         try:
-            resp = requests.get(self.BASE, params={"s": ticker, "i": "d"},
+            # d1/d2 ask for an explicit range; without them stooq returns only
+            # its own default window, which silently truncated a 30-year test
+            # to 4 years.
+            resp = requests.get(self.BASE,
+                                params={"s": ticker, "i": "d", "d1": start, "d2": end},
                                 timeout=_TIMEOUT)
         except Exception as exc:
             raise DataError(f"{symbol}: stooq request failed: {exc}") from exc
@@ -92,7 +99,11 @@ class YahooSource:
         if timeframe != "1d":
             raise DataError(f"yahoo adapter serves daily bars only (got {timeframe!r})")
         ticker = symbol.split("/")[0].strip().upper()
-        rng = "5y" if lookback_days > 730 else "2y" if lookback_days > 365 else "1y"
+        # "max" matters: capping at 5y silently truncates any test that needs
+        # a crisis in the window, and the truncation is invisible unless the
+        # returned span is checked.
+        rng = ("max" if lookback_days > 1900 else "5y" if lookback_days > 730
+               else "2y" if lookback_days > 365 else "1y")
         try:
             resp = requests.get(
                 self.BASE.format(sym=ticker),
