@@ -329,6 +329,116 @@
       "symbol": "NVDA",
       "target_weight": 0.0,
       "ts": "2026-09-15T22:37:00.454802+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.030634566951536102,
+        "trend_z": 0.838463971333522,
+        "vol": 0.0928414416123662
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 754.0499877929688,
+      "exit_price": null,
+      "horizon_bars": 5,
+      "id": "SPY-1789598273",
+      "pnl_weight": null,
+      "prob": 0.5221412422510198,
+      "realised_return": null,
+      "resolve_at": "2026-09-21T22:37:53.939041+00:00",
+      "resolved": false,
+      "sigma": 0.005848461092072488,
+      "symbol": "SPY",
+      "target_weight": 0.03985423605183558,
+      "ts": "2026-09-16T22:37:53.939041+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.055537691557972835,
+        "trend_z": 0.763758688607064,
+        "vol": 0.13336411771497012
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 704.719970703125,
+      "exit_price": null,
+      "horizon_bars": 5,
+      "id": "QQQ-1789598273",
+      "pnl_weight": null,
+      "prob": 0.439482147653602,
+      "realised_return": null,
+      "resolve_at": "2026-09-21T22:37:53.939041+00:00",
+      "resolved": false,
+      "sigma": 0.008401149745079871,
+      "symbol": "QQQ",
+      "target_weight": 0.0,
+      "ts": "2026-09-16T22:37:53.939041+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.022553467457651744,
+        "trend_z": 1.0891698071985554,
+        "vol": 0.2465757669509158
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 332.4100036621094,
+      "exit_price": null,
+      "horizon_bars": 5,
+      "id": "AAPL-1789598273",
+      "pnl_weight": null,
+      "prob": 0.8350170317059027,
+      "realised_return": null,
+      "resolve_at": "2026-09-21T22:37:53.939041+00:00",
+      "resolved": false,
+      "sigma": 0.015532813302074818,
+      "symbol": "AAPL",
+      "target_weight": 0.35,
+      "ts": "2026-09-16T22:37:53.939041+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.09550430540659982,
+        "trend_z": 0.22346223979966456,
+        "vol": 0.27579332995692374
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 490.29998779296875,
+      "exit_price": null,
+      "horizon_bars": 5,
+      "id": "MSFT-1789598273",
+      "pnl_weight": null,
+      "prob": 0.7229098349316015,
+      "realised_return": null,
+      "resolve_at": "2026-09-21T22:37:53.939041+00:00",
+      "resolved": false,
+      "sigma": 0.017373346769438098,
+      "symbol": "MSFT",
+      "target_weight": 0.21822737859879654,
+      "ts": "2026-09-16T22:37:53.939041+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.09264448582238194,
+        "trend_z": 0.47751995255474367,
+        "vol": 0.39098430766436226
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 213.89999389648438,
+      "exit_price": null,
+      "horizon_bars": 5,
+      "id": "NVDA-1789598273",
+      "pnl_weight": null,
+      "prob": 0.4679443909159585,
+      "realised_return": null,
+      "resolve_at": "2026-09-21T22:37:53.939041+00:00",
+      "resolved": false,
+      "sigma": 0.024629696300206373,
+      "symbol": "NVDA",
+      "target_weight": 0.0,
+      "ts": "2026-09-16T22:37:53.939041+00:00"
     }
   ]
 }
