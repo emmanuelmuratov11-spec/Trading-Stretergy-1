@@ -10,23 +10,35 @@ data:
   # this somewhere Binance serves; "synthetic" runs fully offline.
   source: coinbase
   symbols: ["BTC/USD", "ETH/USD", "SOL/USD"]
-  timeframe: "1h"
+  timeframe: "6h"   # trend worked at 6h and 1d, lost at 1h; cost is why
   lookback_days: 720
   cache_dir: data_cache
   benchmark: "BTC/USD"
 
 labels:
-  horizon_bars: 24        # judge each decision over the next 24 hours
+  horizon_bars: 8         # 2 days on 6h bars
   upper_sigma: 1.5
   lower_sigma: 1.5
-  vol_window: 72
+  vol_window: 40
 
 model:
-  train_bars: 4320        # ~6 months of hourly history per fit
-  retrain_every: 168      # refit weekly -- this is the "self-learning" loop
-  min_train_bars: 1500
+  # Switched from the ML engine to trend on 2026-10-10, on live evidence rather
+  # than a backtest. Over 1875 graded out-of-sample calls the ML engine hit
+  # 44.4% with a 95% interval of 42.2-46.7% - the whole interval below a coin
+  # flip, so it was not merely edgeless but reliably wrong. Over the same period
+  # the trend engine on daily bars ran 62.5% over 80 calls with a lower bound of
+  # 51.5%, the first thing in this project to clear chance.
+  #
+  # Trend also won every backtest comparison at 6h and 1d while losing at 1h,
+  # which is why the timeframe moves with the engine.
+  kind: trend
+  trend_lookbacks: [4, 12, 28, 56]   # 1d, 3d, 1w, 2w on 6h bars
+  trend_scale: 1.5
+  train_bars: 900
+  retrain_every: 40
+  min_train_bars: 350
   n_seeds: 3
-  embargo_bars: 24        # must be >= labels.horizon_bars, or labels leak
+  embargo_bars: 8
   calibrate: true
 
 risk:
@@ -38,7 +50,7 @@ risk:
   allow_shorts: false
   max_drawdown_stop: 0.25   # flatten everything past a 25% drawdown
   drawdown_recovery: 0.10
-  scalar_smoothing: 120
+  scalar_smoothing: 20
 
 costs:
   taker_fee_bps: 6.0        # 0.06%. Check your own exchange's actual fee.
@@ -46,7 +58,7 @@ costs:
   slippage_coef: 0.35
   min_trade_weight: 0.04
   rebalance_band: 0.40
-  rebalance_every: 6        # hourly bars, weekly refits -> no need to retrade hourly
+  rebalance_every: 2
 
 alerts:
   channels: ["console", "telegram"]
