@@ -85,3 +85,42 @@ def test_policy_denials_are_not_retried():
     assert _is_policy_denial(requests.exceptions.ProxyError("Tunnel connection failed: 403 Forbidden"))
     assert not _is_policy_denial(requests.exceptions.ConnectionError("connection reset by peer"))
     assert not _is_policy_denial(ValueError("something else"))
+
+
+def test_daily_bars_align_on_date_not_session_time():
+    """Feeds stamp daily bars with a session time that differs per symbol and
+    shifts with daylight saving. A raw intersection then discards nearly
+    everything while appearing to succeed - on real data 22 years of four US
+    ETFs collapsed to ~204 shared bars, and the metrics over that window
+    reported a Sharpe of 4.30 and a CAGR of 92% from a 10-month sample."""
+    import pandas as pd
+
+    from quantbot.data.loader import align
+
+    def frame(hour):
+        idx = pd.date_range("2020-01-01", periods=400, freq="D", tz="UTC") + pd.Timedelta(hours=hour)
+        return pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                             "volume": 1.0}, index=idx)
+
+    out = align({"SPY": frame(14), "GLD": frame(13), "TLT": frame(14)})
+    assert len(out["SPY"]) >= 390, (
+        f"daily alignment lost almost everything: kept {len(out['SPY'])} of 400"
+    )
+    assert len(out["SPY"]) == len(out["GLD"]) == len(out["TLT"])
+
+
+def test_intraday_alignment_still_requires_matching_timestamps():
+    """The date-normalising rule must not leak into intraday data, where two
+    different hours really are two different bars."""
+    import pandas as pd
+
+    from quantbot.data.loader import align
+
+    a = pd.date_range("2026-01-01", periods=200, freq="h", tz="UTC")
+    b = a + pd.Timedelta(minutes=30)
+    fa = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                       "volume": 1.0}, index=a)
+    fb = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                       "volume": 1.0}, index=b)
+    with pytest.raises(DataError):
+        align({"A": fa, "B": fb})

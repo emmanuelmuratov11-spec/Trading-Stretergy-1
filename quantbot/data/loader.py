@@ -133,12 +133,43 @@ def align(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     Cross-asset features compare symbols bar for bar, so they must sit on one
     clock. Symbols are reindexed onto the intersection, never forward-filled
     across gaps -- a stale bar presented as fresh is a silent lie.
+
+    DAILY bars are normalised to their date first. Feeds stamp a daily bar with
+    a session time, and those times differ between symbols and shift with
+    daylight saving, so a raw intersection throws away nearly everything while
+    looking like it worked: on real data 22 years of four US ETFs collapsed to
+    about 204 shared bars, and the metrics computed over that window reported a
+    Sharpe of 4.30 and a CAGR of 92% from an 10-month sample.
     """
     if not frames:
         return {}
+
+    # Daily or slower: the date is the identity of the bar, not the timestamp.
+    def _is_daily(df: pd.DataFrame) -> bool:
+        if len(df) < 3:
+            return False
+        return df.index.to_series().diff().median() >= pd.Timedelta("20h")
+
+    work = {}
+    for sym, df in frames.items():
+        d = df.copy()
+        if _is_daily(d):
+            d.index = d.index.normalize()
+            d = d[~d.index.duplicated(keep="last")]
+        work[sym] = d
+
     common = None
-    for df in frames.values():
+    for df in work.values():
         common = df.index if common is None else common.intersection(df.index)
     if common is None or len(common) == 0:
         raise DataError("symbols share no overlapping timestamps")
-    return {sym: df.loc[common].copy() for sym, df in frames.items()}
+
+    # Losing most of the data to alignment is a defect, not a detail.
+    longest = max(len(df) for df in work.values())
+    if len(common) < longest * 0.5:
+        log.warning(
+            "alignment kept only %d of %d bars (%.0f%%) across %d symbols. "
+            "Any conclusion drawn from this window is unreliable.",
+            len(common), longest, 100.0 * len(common) / longest, len(work),
+        )
+    return {sym: df.loc[common].copy() for sym, df in work.items()}
