@@ -43811,6 +43811,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.0,
       "ts": "2026-10-10T16:18:36.317221+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.041668254519259595,
+        "trend_z": 0.5259380206742629,
+        "vol": 0.31256177464834395
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 82986.68,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "BTCUSD-1791652643",
+      "pnl_weight": null,
+      "prob": 0.4550710686049363,
+      "realised_return": null,
+      "resolve_at": "2026-10-12T17:17:23.791190+00:00",
+      "resolved": false,
+      "sigma": 0.008180115506909731,
+      "symbol": "BTC/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-10T17:17:23.791190+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.09755438502943525,
+        "trend_z": 0.1389549331881608,
+        "vol": 0.4913293971629581
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 2504.81,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "ETHUSD-1791652643",
+      "pnl_weight": null,
+      "prob": 0.35012736931607946,
+      "realised_return": null,
+      "resolve_at": "2026-10-12T17:17:23.791190+00:00",
+      "resolved": false,
+      "sigma": 0.012858678017346028,
+      "symbol": "ETH/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-10T17:17:23.791190+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.11251008878127533,
+        "trend_z": 0.24638630272533016,
+        "vol": 0.5975574204500638
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 109.96,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "SOLUSD-1791652643",
+      "pnl_weight": null,
+      "prob": 0.28042355763097776,
+      "realised_return": null,
+      "resolve_at": "2026-10-12T17:17:23.791190+00:00",
+      "resolved": false,
+      "sigma": 0.0156387924492431,
+      "symbol": "SOL/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-10T17:17:23.791190+00:00"
     }
   ]
 }
