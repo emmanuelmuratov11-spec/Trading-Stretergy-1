@@ -45461,6 +45461,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.0,
       "ts": "2026-10-11T17:18:50.722224+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.03228699044078098,
+        "trend_z": 0.6748136299589651,
+        "vol": 0.28473859293486153
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 83799.05,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "BTCUSD-1791742929",
+      "pnl_weight": null,
+      "prob": 0.6089540406761593,
+      "realised_return": null,
+      "resolve_at": "2026-10-13T18:22:09.839631+00:00",
+      "resolved": false,
+      "sigma": 0.007451949561339167,
+      "symbol": "BTC/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-11T18:22:09.839631+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.08504889068230781,
+        "trend_z": 0.3219337075602144,
+        "vol": 0.44999135630903236
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 2539.52,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "ETHUSD-1791742929",
+      "pnl_weight": null,
+      "prob": 0.4806002767276395,
+      "realised_return": null,
+      "resolve_at": "2026-10-13T18:22:09.839631+00:00",
+      "resolved": false,
+      "sigma": 0.011776812042548213,
+      "symbol": "ETH/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-11T18:22:09.839631+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.09669087974172719,
+        "trend_z": 0.502325171784457,
+        "vol": 0.5676770871189
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 111.92,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "SOLUSD-1791742929",
+      "pnl_weight": null,
+      "prob": 0.4391143393460258,
+      "realised_return": null,
+      "resolve_at": "2026-10-13T18:22:09.839631+00:00",
+      "resolved": false,
+      "sigma": 0.014856788385218055,
+      "symbol": "SOL/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-11T18:22:09.839631+00:00"
     }
   ]
 }
