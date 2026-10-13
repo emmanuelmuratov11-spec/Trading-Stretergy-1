@@ -77,26 +77,6 @@ def main() -> int:
     res = backtest.run(cfg, frames, n_trials=args.trials)
     strat, bench = res.equity, res.benchmark_equity
 
-    # Where did the bars go? The first two crisis runs reported a CAGR above
-    # their total return, which is impossible over a multi-year window and
-    # means the simulated period was under a year while the data spanned 22.
-    # Normalising daily timestamps in align() did not change the numbers by a
-    # single decimal, so the loss happens after alignment. Rather than guess a
-    # third time, print the count at every stage.
-    n_in = min(len(d) for d in frames.values())
-    n_prob = int(res.probabilities.notna().any(axis=1).sum())
-    years = len(strat) / max(cfg.data.annual_days, 1)
-    print("BAR ACCOUNTING")
-    print(f"  aligned input bars      {n_in}")
-    print(f"  bars with a prediction  {n_prob}")
-    print(f"  bars in the equity curve{len(strat):6d}")
-    print(f"  implied years simulated {years:.2f}")
-    if len(strat) < n_in * 0.5:
-        print(f"  *** {n_in - len(strat)} bars ({100*(1-len(strat)/n_in):.0f}%) "
-              "were dropped between alignment and simulation.")
-        print("  *** Every figure below describes only the surviving window.")
-    print()
-
     print("=" * 78)
     print("CRISIS PERIODS - the only test that matters for a trend overlay")
     print("=" * 78)
@@ -144,6 +124,26 @@ def main() -> int:
             print("  On this evidence the overlay does not earn its complexity.")
     print("\n  Note: a trend overlay is SUPPOSED to lag in bull markets. Judge it")
     print("  on the drawdown columns, and on whether the return given up is worth it.")
+
+    # Printed LAST so a short log tail always reaches it. The first three runs
+    # reported a CAGR above their total return - impossible over a multi-year
+    # window - meaning only a fraction of the fetched history was simulated.
+    n_in = min(len(d) for d in frames.values())
+    n_prob = int(res.probabilities.notna().any(axis=1).sum())
+    years = len(strat) / max(cfg.data.annual_days, 1)
+    print("\n" + "=" * 78)
+    print("BAR ACCOUNTING - where the history went")
+    print("=" * 78)
+    print(f"  aligned input bars       {n_in:6d}   ({frames[list(frames)[0]].index[0].date()} "
+          f"to {frames[list(frames)[0]].index[-1].date()})")
+    print(f"  bars with a prediction   {n_prob:6d}")
+    print(f"  bars in the equity curve {len(strat):6d}   "
+          f"({strat.index[0].date()} to {strat.index[-1].date()})")
+    print(f"  implied years simulated  {years:6.2f}")
+    if len(strat) < n_in * 0.5:
+        print(f"  *** {n_in - len(strat)} bars ({100*(1-len(strat)/n_in):.0f}%) dropped "
+              "between alignment and simulation.")
+        print("  *** EVERY FIGURE ABOVE DESCRIBES ONLY THE SURVIVING WINDOW.")
     return 0
 
 
