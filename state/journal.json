@@ -50147,6 +50147,72 @@
       "symbol": "SOL/USD",
       "target_weight": 0.0,
       "ts": "2026-10-25T01:03:15.565653+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.07071383154720134,
+        "trend_z": 0.36389456853941876,
+        "vol": 0.29242716293760795
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 80471.48,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "BTCUSD-1792907793",
+      "pnl_weight": null,
+      "prob": 0.31181167177496893,
+      "realised_return": null,
+      "resolve_at": "2026-10-27T05:56:33.169841+00:00",
+      "resolved": false,
+      "sigma": 0.007653168634836517,
+      "symbol": "BTC/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-25T05:56:33.169841+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.15388135092485178,
+        "trend_z": -0.43627849303380795,
+        "vol": 0.46253127126471527
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 2348.47,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "ETHUSD-1792907793",
+      "pnl_weight": null,
+      "prob": 0.2977814329794819,
+      "realised_return": null,
+      "resolve_at": "2026-10-27T05:56:33.169841+00:00",
+      "resolved": false,
+      "sigma": 0.012104996616300774,
+      "symbol": "ETH/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-25T05:56:33.169841+00:00"
+    },
+    {
+      "context": {
+        "drawdown": -0.17845036319612595,
+        "trend_z": 0.0,
+        "vol": 0.47304373420475027
+      },
+      "correct": null,
+      "engine": "trend",
+      "entry_price": 101.79,
+      "exit_price": null,
+      "horizon_bars": 8,
+      "id": "SOLUSD-1792907793",
+      "pnl_weight": null,
+      "prob": 0.34211267703644727,
+      "realised_return": null,
+      "resolve_at": "2026-10-27T05:56:33.169841+00:00",
+      "resolved": false,
+      "sigma": 0.012380120345708642,
+      "symbol": "SOL/USD",
+      "target_weight": 0.0,
+      "ts": "2026-10-25T05:56:33.169841+00:00"
     }
   ]
 }
